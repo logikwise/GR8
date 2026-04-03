@@ -18,6 +18,7 @@ import {
 import { Link } from "@/lib/router";
 import { useCompany } from "@/context/CompanyContext";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { IdBadge } from "../components/IdBadge";
 import { cn } from "@/lib/utils";
 
 interface SkillEntry {
@@ -88,10 +89,11 @@ function SkillCard({ skill, onDelete }: { skill: SkillEntry; onDelete: () => voi
             <span className="text-[10px] rounded bg-[var(--grace-accent-muted)] px-1.5 py-0.5 text-[var(--grace-accent)]">{skill.source}</span>
           </div>
           <p className="mt-1 text-xs text-muted-foreground leading-snug line-clamp-2">{skill.description}</p>
-          <div className="mt-2 flex flex-wrap gap-1">
+          <div className="mt-2 flex flex-wrap items-center gap-1">
             {skill.capabilities.map((cap) => (
               <span key={cap} className="text-[9px] rounded border border-border/60 bg-muted/30 px-1.5 py-0.5 text-muted-foreground">{cap}</span>
             ))}
+            <IdBadge id={skill.id} className="ml-auto" />
           </div>
         </div>
       </div>
@@ -110,6 +112,7 @@ function SkillRow({ skill, onDelete }: { skill: SkillEntry; onDelete: () => void
         </div>
         <span className="text-xs text-muted-foreground truncate">{skill.description}</span>
       </div>
+      <IdBadge id={skill.id} />
       <span className="text-[10px] rounded bg-muted/60 px-1.5 py-0.5 text-muted-foreground shrink-0">{skill.source}</span>
       <button type="button" onClick={onDelete}
         className="flex items-center justify-center w-7 h-7 rounded text-muted-foreground/20 hover:text-destructive hover:bg-destructive/10 transition-all opacity-0 group-hover:opacity-100 shrink-0">

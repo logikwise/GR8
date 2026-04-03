@@ -5,6 +5,7 @@
 
 import { ArrowRight, Clock, CircleDot } from "lucide-react";
 import type { Instance, InstanceStatus } from "../instances/instanceTypes";
+import { IdBadge } from "./IdBadge";
 import { cn } from "@/lib/utils";
 
 const STATUS_CONFIG: Record<InstanceStatus, { label: string; color: string }> = {
@@ -64,6 +65,7 @@ export function InstanceCard({ instance, onOpen, className }: InstanceCardProps)
           <CircleDot size={11} />
           {stepCount} {stepCount === 1 ? "step" : "steps"}
         </span>
+        <IdBadge id={instance.id} />
         <span className="flex items-center gap-1 ml-auto">
           <Clock size={11} />
           {formatDate(instance.createdAt)}

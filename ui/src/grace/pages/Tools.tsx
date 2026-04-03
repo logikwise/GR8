@@ -16,6 +16,7 @@ import {
   Server, Puzzle, Search, LayoutGrid, List, Trash2, X,
 } from "lucide-react";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { IdBadge } from "../components/IdBadge";
 import { cn } from "@/lib/utils";
 
 interface ToolEntry {
@@ -92,7 +93,10 @@ function ToolCard({ tool, onDelete }: { tool: ToolEntry; onDelete: () => void })
             <span className={cn("text-[10px] rounded px-1.5 py-0.5", STATUS_STYLES[tool.status])}>{tool.status}</span>
           </div>
           <p className="mt-1 text-xs text-muted-foreground leading-snug line-clamp-2">{tool.description}</p>
-          <span className="mt-1.5 inline-block text-[9px] rounded bg-muted/40 px-1.5 py-0.5 text-muted-foreground/70">{tool.provider}</span>
+          <div className="mt-1.5 flex items-center gap-2">
+            <span className="text-[9px] rounded bg-muted/40 px-1.5 py-0.5 text-muted-foreground/70">{tool.provider}</span>
+            <IdBadge id={tool.id} className="ml-auto" />
+          </div>
         </div>
       </div>
     </div>
@@ -110,6 +114,7 @@ function ToolRow({ tool, onDelete }: { tool: ToolEntry; onDelete: () => void }) 
         </div>
         <span className="text-xs text-muted-foreground truncate">{tool.description}</span>
       </div>
+      <IdBadge id={tool.id} />
       <span className={cn("text-[10px] rounded px-1.5 py-0.5 shrink-0", STATUS_STYLES[tool.status])}>{tool.status}</span>
       <span className="text-[10px] rounded bg-muted/60 px-1.5 py-0.5 text-muted-foreground shrink-0">{tool.provider}</span>
       <button type="button" onClick={onDelete}

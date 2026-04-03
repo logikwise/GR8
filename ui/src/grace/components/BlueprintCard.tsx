@@ -6,6 +6,7 @@
 
 import { ArrowRight, Layers, Users, Zap, Settings2 } from "lucide-react";
 import type { Blueprint } from "../blueprints/blueprintTypes";
+import { IdBadge } from "./IdBadge";
 import { cn } from "@/lib/utils";
 
 const WORKFLOW_TYPE_LABELS: Record<string, string> = {
@@ -54,6 +55,7 @@ export function BlueprintCard({ blueprint, onOpen, onManage, viewMode = "card", 
             {typeLabel}
           </span>
           <span className="text-[10px] text-muted-foreground/40">v{blueprint.version}</span>
+          <IdBadge id={blueprint.id} />
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {onManage && (
@@ -108,7 +110,8 @@ export function BlueprintCard({ blueprint, onOpen, onManage, viewMode = "card", 
           {hasSpecialists ? <Users size={11} /> : <Zap size={11} />}
           {typeLabel}
         </span>
-        <span className="ml-auto text-[10px] text-muted-foreground/50">v{blueprint.version}</span>
+        <span className="text-[10px] text-muted-foreground/50">v{blueprint.version}</span>
+        <IdBadge id={blueprint.id} className="ml-auto" />
       </div>
 
       {blueprint.ui?.tags && blueprint.ui.tags.length > 0 && (
