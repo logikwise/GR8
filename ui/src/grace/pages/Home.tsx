@@ -1,5 +1,5 @@
 import { Link } from "@/lib/router";
-import { Zap, Layers, BookOpen, Cpu, Wrench, FolderOpen } from "lucide-react";
+import { Zap, Layers, BookOpen, Cpu, Wrench, FolderOpen, LibraryBig } from "lucide-react";
 import { useBgPattern, BG_PATTERNS, type BgPatternKey } from "../hooks/useBgPattern";
 import { cn } from "@/lib/utils";
 
@@ -35,10 +35,16 @@ const QUICK_LINKS = [
     icon: <Wrench size={20} />,
   },
   {
-    label: "Library",
+    label: "Outputs",
     description: "Review artifacts and outputs from runs",
     to: "/grace/outputs",
     icon: <FolderOpen size={20} />,
+  },
+  {
+    label: "Library",
+    description: "Shared resources, knowledge bases, and documents",
+    to: "/grace/knowledge",
+    icon: <LibraryBig size={20} />,
   },
 ];
 

@@ -24,7 +24,7 @@ export function GraceOutputs() {
     <div className="mx-auto max-w-4xl px-6 py-10">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Library</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Outputs</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Artifacts, files, and structured outputs produced by agent runs. Browse, filter, and export results.
           </p>
@@ -33,7 +33,7 @@ export function GraceOutputs() {
 
       <div className="rounded-lg border border-dashed border-border bg-card/50 p-12 text-center">
         <FolderOpen size={32} className="mx-auto mb-3 text-muted-foreground/40" />
-        <p className="text-sm font-medium text-muted-foreground">Library is empty</p>
+        <p className="text-sm font-medium text-muted-foreground">Outputs is empty</p>
         <p className="mt-1 text-xs text-muted-foreground/70 max-w-sm mx-auto">
           Outputs from completed Instance runs will appear here. Run an Instance from Studio to generate artifacts.
         </p>

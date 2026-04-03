@@ -26,6 +26,7 @@ import {
   LogOut,
   Monitor,
   Building2,
+  LibraryBig,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/context/ThemeContext";
@@ -49,7 +50,8 @@ const PRIMARY_NAV: GraceNavItem[] = [
   { label: "Instances", to: "/grace/instances",  icon: <Layers size={16} /> },
   { label: "Skills",    to: "/grace/skills",     icon: <Zap size={16} /> },
   { label: "Tools",     to: "/grace/tools",      icon: <Wrench size={16} /> },
-  { label: "Library",   to: "/grace/outputs",    icon: <FileOutput size={16} /> },
+  { label: "Outputs",   to: "/grace/outputs",    icon: <FileOutput size={16} /> },
+  { label: "Library",   to: "/grace/knowledge",  icon: <LibraryBig size={16} /> },
 ];
 
 const BOTTOM_NAV: GraceNavItem[] = [
