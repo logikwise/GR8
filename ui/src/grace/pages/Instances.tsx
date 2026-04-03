@@ -40,11 +40,16 @@ function InstanceRow({
   const statusColor = STATUS_COLORS[instance.status] ?? STATUS_COLORS.draft;
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-2.5 transition-colors hover:border-[var(--grace-accent)]/40 hover:bg-card/80 group">
-      <span className={cn("text-[10px] font-medium uppercase tracking-wide rounded border px-1.5 py-0.5 shrink-0", statusColor)}>
-        {instance.status}
-      </span>
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-indigo-500/30 bg-indigo-500/10">
+        <Box size={12} className="text-indigo-400" />
+      </div>
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-semibold truncate">{instance.name}</div>
+        <div className="flex items-center gap-2">
+          <span className={cn("text-[10px] font-medium uppercase tracking-wide rounded border px-1.5 py-0.5 shrink-0", statusColor)}>
+            {instance.status}
+          </span>
+          <span className="text-sm font-semibold truncate">{instance.name}</span>
+        </div>
         <div className="text-xs text-muted-foreground truncate">from {instance.blueprintName}</div>
       </div>
       <div className="hidden sm:flex items-center gap-3 text-xs text-muted-foreground shrink-0">
