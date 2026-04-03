@@ -1,4 +1,13 @@
-import { NavLink, useNavigate } from "@/lib/router";
+/**
+ * GraceSidebar
+ *
+ * Supports expanded (w-56) and collapsed (w-12 icon-only) modes.
+ * Auto-collapses when first entering any /grace/studio* route.
+ * User toggle is respected — won't re-collapse mid-session within Studio.
+ */
+
+import { useState, useEffect, useRef } from "react";
+import { NavLink, useNavigate, useLocation } from "@/lib/router";
 import {
   Home,
   LayoutDashboard,
@@ -9,8 +18,13 @@ import {
   FileOutput,
   Settings,
   ShieldCheck,
-  ChevronRight,
   Zap,
+  ChevronsLeft,
+  ChevronsRight,
+  Sun,
+  Moon,
+  LogOut,
+  Monitor,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/context/ThemeContext";
@@ -26,28 +40,34 @@ interface GraceNavItem {
 }
 
 const PRIMARY_NAV: GraceNavItem[] = [
-  { label: "Home", to: "/grace/home", icon: <Home size={16} /> },
-  { label: "Workspace", to: "/grace/workspace", icon: <LayoutDashboard size={16} /> },
-  { label: "Workflows", to: "/grace/library", icon: <BookOpen size={16} /> },
-  { label: "Studio", to: "/grace/studio", icon: <Cpu size={16} /> },
-  { label: "Instances", to: "/grace/instances", icon: <Layers size={16} /> },
-  { label: "Skills", to: "/grace/skills", icon: <Zap size={16} /> },
-  { label: "Tools", to: "/grace/tools", icon: <Wrench size={16} /> },
-  { label: "Library", to: "/grace/outputs", icon: <FileOutput size={16} /> },
+  { label: "Home",      to: "/grace/home",      icon: <Home size={16} /> },
+  { label: "Workspace", to: "/grace/workspace",  icon: <LayoutDashboard size={16} /> },
+  { label: "Workflows", to: "/grace/library",    icon: <BookOpen size={16} /> },
+  { label: "Studio",    to: "/grace/studio",     icon: <Cpu size={16} /> },
+  { label: "Instances", to: "/grace/instances",  icon: <Layers size={16} /> },
+  { label: "Skills",    to: "/grace/skills",     icon: <Zap size={16} /> },
+  { label: "Tools",     to: "/grace/tools",      icon: <Wrench size={16} /> },
+  { label: "Library",   to: "/grace/outputs",    icon: <FileOutput size={16} /> },
 ];
 
 const BOTTOM_NAV: GraceNavItem[] = [
   { label: "Settings", to: "/grace/settings", icon: <Settings size={16} /> },
-  { label: "Admin", to: "/grace/admin", icon: <ShieldCheck size={16} /> },
+  { label: "Admin",    to: "/grace/admin",    icon: <ShieldCheck size={16} /> },
 ];
 
-function GraceNavLink({ item }: { item: GraceNavItem }) {
+// ─── Nav link ─────────────────────────────────────────────────────────────────
+
+function GraceNavLink({ item, collapsed }: { item: GraceNavItem; collapsed: boolean }) {
   return (
     <NavLink
       to={item.to}
+      title={collapsed ? item.label : undefined}
       className={({ isActive }) =>
         cn(
-          "group flex items-center gap-2.5 rounded px-2.5 py-1.5 text-sm transition-colors",
+          "flex items-center rounded transition-colors",
+          collapsed
+            ? "justify-center w-9 h-9 mx-auto"
+            : "gap-2.5 px-2.5 py-1.5 text-sm",
           isActive
             ? "bg-[var(--grace-accent-muted)] text-[var(--grace-accent)] font-medium"
             : "text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -55,15 +75,33 @@ function GraceNavLink({ item }: { item: GraceNavItem }) {
       }
     >
       <span className="shrink-0">{item.icon}</span>
-      <span className="truncate">{item.label}</span>
+      {!collapsed && <span className="truncate">{item.label}</span>}
     </NavLink>
   );
 }
+
+// ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 export function GraceSidebar() {
   const { theme, toggleTheme } = useTheme();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Default collapsed if starting on a Studio route
+  const [collapsed, setCollapsed] = useState(() =>
+    location.pathname.startsWith("/grace/studio")
+  );
+
+  // Auto-collapse when first entering Studio; don't re-collapse while navigating within it
+  const wasInStudio = useRef(location.pathname.startsWith("/grace/studio"));
+  useEffect(() => {
+    const inStudio = location.pathname.startsWith("/grace/studio");
+    if (inStudio && !wasInStudio.current) {
+      setCollapsed(true);
+    }
+    wasInStudio.current = inStudio;
+  }, [location.pathname]);
 
   const { data: health } = useQuery({
     queryKey: queryKeys.health,
@@ -72,61 +110,147 @@ export function GraceSidebar() {
     staleTime: 60_000,
   });
 
-  const isAuthenticatedMode = (health as { deploymentMode?: string } | undefined)?.deploymentMode === "authenticated";
+  const isAuthenticatedMode =
+    (health as { deploymentMode?: string } | undefined)?.deploymentMode === "authenticated";
 
   async function handleSignOut() {
-    try {
-      await authApi.signOut();
-    } finally {
-      queryClient.clear();
-      navigate("/auth");
-    }
+    try { await authApi.signOut(); }
+    finally { queryClient.clear(); navigate("/auth"); }
   }
 
   return (
-    <aside className="flex h-screen w-56 shrink-0 flex-col border-r border-border bg-sidebar text-sidebar-foreground">
-      <div className="flex items-center gap-2 px-4 py-4 border-b border-border">
-        <div className="flex h-7 w-7 items-center justify-center rounded bg-[var(--grace-accent)] text-white text-xs font-bold shrink-0">
+    <aside
+      className={cn(
+        "flex h-screen shrink-0 flex-col border-r border-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-in-out overflow-hidden",
+        collapsed ? "w-12" : "w-56"
+      )}
+    >
+      {/* Header / Logo */}
+      <div
+        className={cn(
+          "flex items-center border-b border-border shrink-0",
+          collapsed ? "justify-center py-3.5 px-0" : "gap-2 px-4 py-4"
+        )}
+      >
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[var(--grace-accent)] text-white text-xs font-bold">
           G
         </div>
-        <span className="text-sm font-semibold tracking-wide text-foreground">GRACE</span>
-        <ChevronRight size={12} className="ml-auto text-muted-foreground" />
+        {!collapsed && (
+          <>
+            <span className="text-sm font-semibold tracking-wide text-foreground">GRACE</span>
+            <button
+              type="button"
+              onClick={() => setCollapsed(true)}
+              className="ml-auto flex items-center justify-center w-6 h-6 rounded text-muted-foreground/50 hover:text-foreground hover:bg-accent transition-colors"
+              title="Collapse sidebar"
+            >
+              <ChevronsLeft size={13} />
+            </button>
+          </>
+        )}
+        {collapsed && (
+          <span className="sr-only">GRACE</span>
+        )}
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
+      {/* Expand button (collapsed mode only) */}
+      {collapsed && (
+        <button
+          type="button"
+          onClick={() => setCollapsed(false)}
+          className="flex items-center justify-center w-9 h-7 mx-auto mt-2 rounded text-muted-foreground/40 hover:text-foreground hover:bg-accent transition-colors"
+          title="Expand sidebar"
+        >
+          <ChevronsRight size={13} />
+        </button>
+      )}
+
+      {/* Primary nav */}
+      <nav
+        className={cn(
+          "flex-1 overflow-y-auto py-2",
+          collapsed ? "px-0 space-y-0.5" : "px-2 space-y-0.5"
+        )}
+      >
         {PRIMARY_NAV.map((item) => (
-          <GraceNavLink key={item.to} item={item} />
+          <GraceNavLink key={item.to} item={item} collapsed={collapsed} />
         ))}
       </nav>
 
-      <div className="border-t border-border px-2 py-3 space-y-0.5">
+      {/* Bottom nav */}
+      <div
+        className={cn(
+          "border-t border-border py-2",
+          collapsed ? "px-0 space-y-0.5" : "px-2 space-y-0.5"
+        )}
+      >
         {BOTTOM_NAV.map((item) => (
-          <GraceNavLink key={item.to} item={item} />
+          <GraceNavLink key={item.to} item={item} collapsed={collapsed} />
         ))}
       </div>
 
-      <div className="border-t border-border px-3 py-3 flex items-center justify-between gap-2">
-        <button
-          onClick={toggleTheme}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-        >
-          {theme === "dark" ? "Light mode" : "Dark mode"}
-        </button>
-        {isAuthenticatedMode ? (
-          <button
-            onClick={handleSignOut}
-            className="text-xs text-muted-foreground hover:text-destructive transition-colors"
-          >
-            Sign out
-          </button>
+      {/* Footer (theme + sign out) */}
+      <div
+        className={cn(
+          "border-t border-border shrink-0",
+          collapsed ? "flex flex-col items-center gap-1 py-2" : "px-3 py-3 flex items-center justify-between gap-2"
+        )}
+      >
+        {collapsed ? (
+          <>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="flex items-center justify-center w-9 h-9 rounded text-muted-foreground/60 hover:text-foreground hover:bg-accent transition-colors"
+              title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            >
+              {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+            </button>
+            {isAuthenticatedMode ? (
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="flex items-center justify-center w-9 h-9 rounded text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                title="Sign out"
+              >
+                <LogOut size={14} />
+              </button>
+            ) : (
+              <span
+                className="flex items-center justify-center w-9 h-9 text-muted-foreground/30"
+                title="Running in local trusted mode"
+              >
+                <Monitor size={14} />
+              </span>
+            )}
+          </>
         ) : (
-          <span
-            className="text-xs text-muted-foreground/50 cursor-default"
-            title="Running in local trusted mode — no authentication required"
-          >
-            Local mode
-          </span>
+          <>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            >
+              {theme === "dark" ? "Light mode" : "Dark mode"}
+            </button>
+            {isAuthenticatedMode ? (
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+              >
+                Sign out
+              </button>
+            ) : (
+              <span
+                className="text-xs text-muted-foreground/50 cursor-default"
+                title="Running in local trusted mode — no authentication required"
+              >
+                Local mode
+              </span>
+            )}
+          </>
         )}
       </div>
     </aside>
