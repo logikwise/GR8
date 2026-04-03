@@ -1,0 +1,694 @@
+Continue the GRACE staged refactor. Read and follow these files first:
+
+* docs/product-model.md
+* docs/architecture-plan.md
+* docs/studio-spec.md
+* docs/replit-guardrails.md
+
+This is the current Studio refinement + OpenClaw/runtime integration pass. Treat it as a cleanup, stabilization, and architecture-strengthening phase.
+
+Primary objectives:
+
+1. Replace remaining local/semi-local OpenClaw runtime simulation with real OpenClaw execution wiring where possible by reusing preserved backend/runtime/adapter code
+2. Consolidate broken GRACE routes so Dashboard / Org / related navigation no longer falls back into legacy or broken flows
+3. Refine Studio so it behaves like a true node-based workspace, not a static diagram
+4. Introduce or refine schema-first templates and persistent structures for Skills, Tools, and Workflow Blueprints
+5. Eliminate in-memory-only storage for user-managed assets
+6. Make Studio graph interaction calm, subtle, centered, and locally adjustable
+
+Do NOT remove backend/runtime/orchestration/adapters.
+Do NOT hardcode the product to OpenClaw only, even though OpenClaw is the first real provider.
+Do NOT fake capabilities that are not actually supported through preserved runtime code.
+Do NOT begin the full org/workspace tenancy refactor yet.
+
+## Critical product rules
+
+* Blueprint cannot run directly
+* Only Instances can run
+* Studio remains instance-centric
+* Studio graph and flow remain instance-contained
+* Workspace swarm remains outside Studio
+* Provider health, run dispatch, event streaming, chat interaction, and agent discovery are separate capabilities and must be treated independently
+* A healthy provider connection does not imply all runtime capabilities are available
+* Skills, Tools, and Blueprints must be modeled as reusable library assets, not page-local objects
+* No core user-managed GRACE asset may exist only in module memory if the user can create, edit, duplicate, delete, reopen, refresh, or deep-link to it
+
+## Persistence rules (VERY IMPORTANT)
+
+For this phase, legitimate persistence may be:
+
+* existing backend persistence if available and practical
+* otherwise a clearly isolated localStorage-backed service layer
+
+But it must NOT be:
+
+* module-level arrays
+* temporary in-memory registries for user-managed assets
+* page-local state as the source of truth
+
+This applies to:
+
+* Blueprints / Workflows
+* Instances
+* Runs
+* Skills
+* Tools
+* Provider config
+* Output/Library records if created by the user or produced by runs
+* node positions/layout state where appropriate
+
+If a user can:
+
+* create it
+* duplicate it
+* edit it
+* delete it
+* refresh and expect it to still exist
+* deep-link into it
+
+then it must be persisted through a real service abstraction.
+
+Use stable keys/versioned namespaces for local persistence where backend persistence is not yet wired, for example:
+
+* grace.blueprints.v1
+* grace.instances.v1
+* grace.runs.v1
+* grace.skills.v1
+* grace.tools.v1
+* grace.provider.v1
+* grace.library.v1
+* grace.layout.v1
+
+## A. Reuse preserved OpenClaw code first
+
+Before building new provider execution logic, inspect the preserved runtime and adapter packages, especially anything related to:
+
+* packages/adapters/openclaw-gateway
+* backend runtime services
+* existing run/agent/session plumbing
+* existing connection/auth logic
+
+Goal:
+Wrap or adapt preserved OpenClaw code into the GRACE provider layer instead of duplicating it.
+
+At the end, clearly state what preserved code paths were reused.
+
+## B. Real OpenClaw run dispatch
+
+Upgrade openclawProvider so it can do real execution work when clicking Run on an Instance.
+
+Requirements:
+
+* map the current Instance model into the minimum viable provider payload expected by the preserved OpenClaw adapter/runtime code
+* call real preserved adapter/runtime paths where available
+* capture and persist real run identifiers/session ids/provider ids if returned
+* associate the returned runtime identifiers with the local RunRecord model
+* keep the local RunRecord model as the GRACE-facing state object, but populate it from real provider results where possible
+
+If some runtime fields are unavailable, leave them optional and document capability gaps rather than fabricating them.
+
+## C. Real or semi-real event/log ingestion
+
+Improve runService and provider integration so Studio runtime data comes from actual provider events where possible.
+
+Requirements:
+
+* ingest run start / status / completion / error events from OpenClaw if available
+* ingest step-level progress if available
+* ingest logs or summaries if available
+* ingest trace/meta identifiers if available
+* store these in the RunRecord/event model cleanly
+* preserve fallback structure for missing capabilities without pretending they are real
+
+Wire this data into:
+
+* Runtime tab
+* Logs tab
+* Steps tab
+* Outputs tab
+* Meta tab
+* Trace tab
+
+Each tab should clearly differentiate:
+
+* real provider-backed data
+* partial/inferred data
+* not-yet-available fields
+
+## D. Chat panel runtime bridge
+
+Upgrade the chat panel so it is tied to the active instance/run and provider capability model.
+
+Requirements:
+
+* if provider supports interaction with the active run/session through preserved code, wire send/receive behavior
+* if provider does NOT yet support interactive chat through preserved code, clearly present chat as limited/unavailable for that provider capability
+* do not pretend bidirectional chat is working if it is not
+
+The chat panel should always:
+
+* know which instance it is attached to
+* know which run it is attached to
+* know the active provider
+* know the primary agent binding if available
+
+If agent/session info is not yet available from OpenClaw, show explicit placeholder messaging tied to actual provider capability state.
+
+## E. Agent discovery and binding
+
+If preserved OpenClaw code can expose available agents or agent metadata, start using it.
+
+Requirements:
+
+* add provider capability or fetch path for agent discovery
+* if available, surface real agents in:
+
+  * Connections page
+  * instance binding UI where practical
+  * Studio root/agent node details where practical
+
+If full real agent listing is not yet available:
+
+* preserve the current binding structure
+* add a clear integration boundary and TODO markers
+* do not remove the future-ready agent model
+
+## F. Runtime state coherence
+
+Unify runtime states across the product using actual provider-backed state where possible.
+
+Surfaces:
+
+* Studio header/provider indicator
+* Flow step cards
+* Graph nodes
+* StepInspector
+* Runtime tab
+* bottom console tabs
+* instance list/status badges
+
+Support a coherent state vocabulary such as:
+
+* draft
+* ready
+* running
+* waiting
+* paused
+* completed
+* failed
+* unknown
+
+Map provider-specific states into GRACE-facing states through a translation layer rather than exposing raw provider states directly everywhere.
+
+## G. Route consolidation and broken navigation cleanup
+
+Fix the visible GRACE navigation so Dashboard, Org, and related routes no longer break or fall back unexpectedly.
+
+Requirements:
+
+* identify all visible GRACE nav links that currently point to old/legacy/broken routes
+* either migrate them into the GRACE shell or replace them with clear GRACE placeholder pages that do not break navigation
+* all visible top-level GRACE navigation should stay inside the GRACE shell
+* do not leave dead-end links in the sidebar or main shell
+* if some sections remain legacy, they must be clearly labeled and safely wrapped, not silently bounce away
+
+Specific goal:
+Dashboard and Org must no longer break the user flow.
+
+## H. Dashboard and Org in GRACE shell
+
+Add or improve GRACE-native versions of Dashboard and Org enough to stop breakage and support future expansion.
+
+Dashboard should:
+
+* remain inside the GRACE shell
+* show a stable home/overview surface
+* support future Mission Control metrics later
+* not redirect to old UI
+
+Org should:
+
+* remain inside the GRACE shell
+* provide a stable placeholder or scaffold for future organization/workspace/team structure
+* not redirect to old UI
+
+These do not need the full future MC implementation yet, but they must be stable and coherent.
+
+## I. Outputs / Library real run hookup
+
+If OpenClaw execution returns any usable outputs/artifacts/meta paths, start surfacing them.
+
+Requirements:
+
+* link real or semi-real outputs to the Library surface
+* show provider/source metadata if available
+* connect instance/run outputs into Outputs tab and Library list structure
+* if actual artifact file browsing is not yet available, still surface known output records cleanly
+
+Persist any surfaced output/library records through a service layer, not in memory only.
+
+## J. Schema-first library assets
+
+Implement or refine first-class schema/types/services/templates for:
+
+* Skills
+* Tools
+* Workflow Blueprints
+
+These should not be page-local placeholders. They should be reusable library assets with metadata, validation, persistence, and future import/export compatibility.
+
+### J1. Skill structure
+
+Create a Skill type/schema and sample template.
+
+A Skill should support fields like:
+
+```ts
+type SkillDefinition = {
+  id: string
+  name: string
+  slug: string
+  version: string
+  description: string
+  category: string
+  tags: string[]
+  author?: string
+  source?: "workspace" | "local" | "git" | "url" | "site" | "community"
+  providerCompatibility?: string[]
+  inputSchema?: Record<string, unknown>
+  outputSchema?: Record<string, unknown>
+  instructions?: string
+  examples?: Array<{
+    title: string
+    input: string
+    output?: string
+  }>
+  dependencies?: string[]
+  visibility?: "private" | "workspace" | "shared"
+  status?: "draft" | "active" | "deprecated"
+  metadata?: {
+    createdAt?: string
+    updatedAt?: string
+    notes?: string
+    path?: string
+  }
+}
+```
+
+Create at least 1–2 sample skills such as:
+
+* web_search
+* report_generation
+
+Add a clean service/module for loading, creating, duplicating, updating, deleting, and persisting skills.
+
+### J2. Tool structure
+
+Create a Tool type/schema and sample template.
+
+A Tool should support fields like:
+
+```ts
+type ToolDefinition = {
+  id: string
+  name: string
+  slug: string
+  version: string
+  description: string
+  category: string
+  tags: string[]
+  author?: string
+  source?: "workspace" | "local" | "git" | "url" | "site" | "community"
+  providerCompatibility?: string[]
+  executionType?: "api" | "local" | "provider" | "manual"
+  configSchema?: Record<string, unknown>
+  inputSchema?: Record<string, unknown>
+  outputSchema?: Record<string, unknown>
+  endpoint?: string
+  command?: string
+  visibility?: "private" | "workspace" | "shared"
+  status?: "draft" | "active" | "deprecated"
+  metadata?: {
+    createdAt?: string
+    updatedAt?: string
+    notes?: string
+    path?: string
+  }
+}
+```
+
+Create at least 1–2 sample tools such as:
+
+* browser
+* screenshot
+
+Add a clean service/module for loading, creating, duplicating, updating, deleting, and persisting tools.
+
+### J3. Workflow Blueprint structure
+
+Refine the Workflow Blueprint structure so it is clearly schema-first and compatible with Studio, Flow, Graph, and future provider execution.
+
+Use a structure similar to:
+
+```ts
+type WorkflowBlueprint = {
+  id: string
+  name: string
+  slug: string
+  version: string
+  description: string
+  category: string
+  tags: string[]
+  author?: string
+  workflowType: "single_agent" | "multi_agent" | "swarm"
+  status?: "draft" | "active" | "deprecated"
+  ui?: {
+    icon?: string
+    color?: string
+    graphStyle?: "flow" | "graph" | "hybrid"
+    allowStepEditing?: boolean
+    allowDynamicSteps?: boolean
+  }
+  metadata?: {
+    createdAt?: string
+    updatedAt?: string
+    notes?: string
+    path?: string
+  }
+  instanceConfig: {
+    requiresName: boolean
+    questions: Array<{
+      key: string
+      label: string
+      type: "text" | "textarea" | "number" | "boolean" | "select"
+      required?: boolean
+      default?: unknown
+      options?: string[]
+      helpText?: string
+    }>
+  }
+  agentConfig: {
+    primary: {
+      required: boolean
+      type: string
+      recommendedModel?: string
+      description?: string
+    }
+    specialists?: Array<{
+      key: string
+      required: boolean
+      type: string
+      recommendedModel?: string
+      description?: string
+    }>
+  }
+  steps: Array<{
+    id: string
+    order: number
+    name: string
+    description?: string
+    icon?: string
+    role?: "primary" | "specialist" | "system" | "human_review"
+    prompt?: string
+    skills?: string[]
+    tools?: string[]
+    outputs?: Array<{
+      key: string
+      type: string
+      label?: string
+    }>
+    conditions?: Array<{
+      type: string
+      value?: string
+    }>
+  }>
+  outputs?: {
+    artifacts?: string[]
+    defaultProfile?: string
+  }
+}
+```
+
+Create at least one strong example blueprint that references real sample skills and tools.
+
+Example:
+
+* Website Improvement Finder
+
+  * skills: web_search, report_generation
+  * tools: browser, screenshot
+
+Add a clean service/module for loading, creating, duplicating, updating, deleting, and persisting blueprints.
+Blueprints must survive refresh and deep-linking.
+
+### J4. Create New skeleton generation
+
+When users create a new workflow/skill/tool, generate a schema-valid skeleton object/file using the above structures.
+
+This does not need full versioning yet, but the generated skeletons must be valid, editable, persist correctly, and survive refresh.
+
+### J5. Legitimate add/copy/edit/delete flows
+
+For Skills, Tools, and Workflows:
+
+* add/create must persist
+* duplicate/copy must persist
+* edit/save must persist
+* delete must persist
+* refresh and deep-link must still work after these operations
+
+Do not leave any of these asset flows backed only by module memory.
+
+## K. Skills / Tools / Workflows management cleanup
+
+Improve these library surfaces so they feel real and consistent.
+
+Requirements:
+
+* add metadata display
+* add search/sort/filter/view toggle
+* support create new from skeleton
+* support duplicate/copy
+* support edit/save
+* support delete with confirmation
+* keep import-source structure visible
+* preserve future import paths:
+
+  * connected workspaces
+  * upload/package
+  * git
+  * URL
+  * site/community
+  * skills.sh or similar later
+
+Do not fake backend integrations yet.
+
+## L. Studio graph and flow structural refinement
+
+Refine Studio so it behaves like a true node-based workspace rather than a static strip on a large canvas.
+
+### L1. Agents must be nodes, not a separate strip
+
+Move the agent chips/badges out of the top strip and into the Studio graph as real nodes.
+
+Requirements:
+
+* primary agent = root node
+* specialist agents = connected nodes in the graph
+* chat remains conceptually tied to the primary/root agent
+* do not keep agents as a separate strip above the workflow if they are part of the active instance structure
+
+### L2. Shared node/edge model
+
+Use one shared node/edge model for:
+
+* agents
+* steps
+* skills
+* tools
+* outputs
+
+Both Flow and Graph views should be based on this same underlying model.
+
+### L3. Center workflow on canvas
+
+The loaded workflow/instance must be centered on the available canvas.
+Eliminate top-left bias and large empty dead space.
+
+Requirements:
+
+* centered initial layout
+* fit-to-view behavior with padding
+* few-node workflows should center visually
+* switching between Flow and Graph should preserve positions where sensible
+* do not leave the workflow pasted onto one corner of a giant empty canvas
+
+### L4. Flow view behavior
+
+Flow should remain sequence-first, but still be canvas-aware and centered.
+
+Requirements:
+
+* primary agent first
+* steps in order
+* attached skills/tools near the owning step
+* outputs downstream
+* horizontally organized by default on wide screens
+* node cards clickable
+* node cards draggable/repositionable where appropriate
+
+### L5. Graph view behavior
+
+Graph should use the same underlying node data, but allow more open positioning.
+
+Requirements:
+
+* draggable nodes
+* clickable nodes
+* repositionable workflow
+* calmer, inspectable graph
+* specialist/skill/tool/output relationships visible in context
+
+### L6. Graph interaction physics tuning
+
+Current issue:
+Selecting a node causes the graph to reheat/reset too aggressively and all nodes snap/move with noticeable gravity. This feels unstable.
+
+Update the graph so that:
+
+1. Selecting a node does NOT restart or strongly re-run the full graph simulation
+2. Node selection should only:
+
+   * highlight the selected node
+   * highlight connected edges/nodes
+   * open the inspector
+   * optionally apply a very subtle local emphasis
+3. After the graph initially settles, the layout should enter a stable interaction mode:
+
+   * low-motion
+   * heavily damped
+   * no global snapping on click
+4. Users should be able to move individual nodes slightly by dragging them
+5. Dragging one node should primarily affect that node, with at most subtle local easing on nearby connected nodes
+6. Releasing a dragged node should allow it to settle softly nearby, not trigger a full-layout reset
+7. Keep node positions persistent for the current instance/view
+8. Do not recenter or re-fit the entire graph on every selection
+9. Only use stronger layout/force behavior on:
+
+   * first load
+   * switching into graph view
+   * loading a different instance/blueprint
+   * adding/removing nodes
+
+Desired feel:
+
+* calm
+* subtle
+* inspectable
+* locally adjustable
+* not a constantly reflowing force simulation
+
+Think:
+
+* calm constellation
+  not:
+* shaken snow globe
+
+### L7. Inspector integration
+
+Clicking nodes in both Flow and Graph should open the appropriate detail inspector.
+Reuse existing StepInspector or evolve it into a broader node inspector where appropriate.
+Do not duplicate inspector logic unnecessarily.
+
+## M. Delete / cleanup / stability
+
+Preserve and tighten cleanup behavior:
+
+* instance deletion should clean up associated run records appropriately
+* workflow deletion should remain scoped to the proper library/manage context
+* skill/tool deletion should follow the same confirm pattern where enabled
+* route refreshes on Studio/Connections/Dashboard/Org should be stable
+* no visible regression in prior phases
+
+## N. Provider capability model
+
+Explicitly structure provider capabilities instead of assuming all providers support the same features.
+
+At minimum, track capabilities like:
+
+* healthCheck
+* runDispatch
+* eventStream or eventPoll
+* chatInteraction
+* agentDiscovery
+* outputListing
+
+Use this in UI so the app can honestly communicate current capability status for OpenClaw and future providers.
+
+## O. Non-goals for this phase
+
+Do NOT fully implement:
+
+* org/workspace tenancy refactor
+* budgets/approvals enforcement
+* billing/invoicing
+* shared libraries
+* Hermes / Claude / Codex full support
+* routines/scheduling
+* complete Mission Control portfolio layer
+
+## Deliverables
+
+1. Real OpenClaw dispatch is wired where supported by preserved code
+2. Run records store real provider/runtime identifiers where available
+3. Runtime / Logs / Steps / Outputs / Meta / Trace consume more truthful provider-backed data
+4. Chat panel is honestly tied to provider/run capability state
+5. Agent discovery is started if supported, or capability boundary is clearly implemented
+6. Dashboard and Org no longer break navigation
+7. All visible GRACE navigation stays in the GRACE shell or is clearly wrapped/labeled
+8. Library begins showing real or semi-real outputs where available
+9. Provider capability model exists
+10. Skill, Tool, and Workflow Blueprint schemas/templates exist and are reusable
+11. Create / duplicate / edit / delete flows for these assets are legitimate and persisted
+12. No user-managed GRACE asset relies only on in-memory storage
+13. Studio workflow/graph is centered, agent-aware, and calmer to interact with
+14. App still boots and prior product rules remain intact
+
+## Final self-audit (REQUIRED)
+
+At the end, provide a strict expectation audit with a thumbs-up / caution / fail status for each area:
+
+* [ ] OpenClaw dispatch wiring
+* [ ] Runtime event/log ingestion
+* [ ] Chat capability honesty
+* [ ] Dashboard/Org route consolidation
+* [ ] Blueprint persistence
+* [ ] Skill persistence
+* [ ] Tool persistence
+* [ ] Library/output persistence
+* [ ] Create/duplicate/edit/delete persistence flows
+* [ ] Refresh/deep-link stability
+* [ ] No in-memory-only core asset storage
+* [ ] Provider-agnostic architecture preserved
+* [ ] Agent-as-node Studio structure
+* [ ] Centered workflow canvas behavior
+* [ ] Calm graph interaction behavior
+
+Use:
+
+* 👍 = meets expectation
+* ⚠️ = partial / caveated
+* ❌ = not yet met
+
+Also include:
+
+1. summary of files created/changed
+2. explanation of which preserved OpenClaw code paths were reused
+3. explanation of what OpenClaw capabilities are now truly live vs still partial
+4. explanation of how run dispatch now works
+5. explanation of how runtime events/logs are ingested
+6. explanation of how Dashboard/Org routing was fixed
+7. explanation of Skill / Tool / Workflow schema/template implementation
+8. explanation of Studio graph/flow centering and interaction tuning
+9. list of deferred items for the next phase
+10. note any remaining capability gaps or provider limitations

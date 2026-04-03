@@ -63,6 +63,8 @@ import { GraceSettings } from "./grace/pages/GraceSettings";
 import { GraceAdmin } from "./grace/pages/Admin";
 import { GraceAbout } from "./grace/pages/About";
 import { ThemeManager } from "./grace/pages/ThemeManager";
+import { GraceDashboard } from "./grace/pages/GraceDashboard";
+import { GraceOrg } from "./grace/pages/GraceOrg";
 
 function BootstrapPendingPage({ hasActiveInvite = false }: { hasActiveInvite?: boolean }) {
   return (
@@ -345,6 +347,8 @@ export function App() {
             <Route path="admin" element={<GraceAdmin />} />
             <Route path="about" element={<GraceAbout />} />
             <Route path="theme" element={<ThemeManager />} />
+            <Route path="dashboard" element={<GraceDashboard />} />
+            <Route path="org" element={<GraceOrg />} />
           </Route>
           <Route path="onboarding" element={<OnboardingRoutePage />} />
           <Route path="instance" element={<Navigate to="/instance/settings/general" replace />} />

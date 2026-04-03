@@ -28,6 +28,7 @@ import {
   Building2,
   LibraryBig,
   Plug,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/context/ThemeContext";
@@ -44,15 +45,16 @@ interface GraceNavItem {
 }
 
 const PRIMARY_NAV: GraceNavItem[] = [
-  { label: "Home",      to: "/grace/home",      icon: <Home size={16} /> },
-  { label: "Workspace", to: "/grace/workspace",  icon: <LayoutDashboard size={16} /> },
-  { label: "Workflows", to: "/grace/library",    icon: <BookOpen size={16} /> },
-  { label: "Studio",    to: "/grace/studio",     icon: <Cpu size={16} /> },
-  { label: "Instances", to: "/grace/instances",  icon: <Layers size={16} /> },
-  { label: "Skills",    to: "/grace/skills",     icon: <Zap size={16} /> },
-  { label: "Tools",     to: "/grace/tools",      icon: <Wrench size={16} /> },
-  { label: "Outputs",   to: "/grace/outputs",    icon: <FileOutput size={16} /> },
-  { label: "Library",   to: "/grace/knowledge",  icon: <LibraryBig size={16} /> },
+  { label: "Home",       to: "/grace/home",       icon: <Home size={16} /> },
+  { label: "Dashboard",  to: "/grace/dashboard",  icon: <LayoutDashboard size={16} /> },
+  { label: "Workflows",  to: "/grace/library",    icon: <BookOpen size={16} /> },
+  { label: "Studio",     to: "/grace/studio",     icon: <Cpu size={16} /> },
+  { label: "Instances",  to: "/grace/instances",  icon: <Layers size={16} /> },
+  { label: "Skills",     to: "/grace/skills",     icon: <Zap size={16} /> },
+  { label: "Tools",      to: "/grace/tools",      icon: <Wrench size={16} /> },
+  { label: "Outputs",    to: "/grace/outputs",    icon: <FileOutput size={16} /> },
+  { label: "Library",    to: "/grace/knowledge",  icon: <LibraryBig size={16} /> },
+  { label: "Org",        to: "/grace/org",        icon: <Users size={16} /> },
 ];
 
 const BOTTOM_NAV: GraceNavItem[] = [

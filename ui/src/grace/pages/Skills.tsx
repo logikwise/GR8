@@ -1,84 +1,56 @@
 /**
- * Skills — Phase 5
+ * Skills — Phase 6
  *
- * Improvements:
- *  - Search/filter/view toggle for registered skills
- *  - Sample registered skill entries
- *  - Delete with ConfirmDialog
- *  - Import source cards updated (Phase 6 label)
- *
- * TODO (Phase 6): Replace mock data with GET /api/company-skills.
+ * Fully persisted via skillService (grace.skills.v1).
+ * Supports: create new skeleton, duplicate, delete with confirm.
+ * All changes survive refresh and deep-linking.
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
-  Zap, ArrowRight, Plus, Upload, GitBranch, Globe, Package,
-  Search, LayoutGrid, List, Trash2, X,
+  Zap, Plus, Upload, GitBranch, Globe, Package,
+  Search, LayoutGrid, List, Trash2, X, Copy,
 } from "lucide-react";
-import { Link } from "@/lib/router";
-import { useCompany } from "@/context/CompanyContext";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { IdBadge } from "../components/IdBadge";
 import { cn } from "@/lib/utils";
-
-interface SkillEntry {
-  id: string;
-  name: string;
-  description: string;
-  version: string;
-  source: string;
-  capabilities: string[];
-  createdAt: string;
-}
-
-const SAMPLE_SKILLS: SkillEntry[] = [
-  {
-    id: "skill-web-search",
-    name: "Web Search",
-    description: "Search the web and return structured results. Supports query filters, date ranges, and source restrictions.",
-    version: "1.2.0",
-    source: "built-in",
-    capabilities: ["search", "scrape", "summarise"],
-    createdAt: "2024-11-01",
-  },
-  {
-    id: "skill-code-review",
-    name: "Code Review",
-    description: "Analyse source code for bugs, style issues, and security vulnerabilities.",
-    version: "0.9.1",
-    source: "workspace",
-    capabilities: ["analyse", "diff", "suggest"],
-    createdAt: "2024-12-10",
-  },
-  {
-    id: "skill-doc-summary",
-    name: "Document Summary",
-    description: "Summarise long-form documents into structured bullet points or executive summaries.",
-    version: "1.0.0",
-    source: "built-in",
-    capabilities: ["summarise", "extract", "classify"],
-    createdAt: "2025-01-05",
-  },
-];
+import { skillService } from "../skills/skillService";
+import type { SkillDefinition } from "../skills/skillTypes";
 
 const IMPORT_SOURCES = [
   { id: "workspace", label: "Connected Workspace", description: "Import skills from a connected workspace.",             icon: <Zap size={15} /> },
-  { id: "create",    label: "Create New",           description: "Define a new skill from scratch.",                     icon: <Plus size={15} /> },
   { id: "upload",    label: "Upload / Import File",  description: "Upload a skill package (.json, .yaml, .zip).",        icon: <Upload size={15} /> },
   { id: "git",       label: "Import from Git",       description: "Pull a skill directly from a Git repository.",        icon: <GitBranch size={15} /> },
   { id: "url",       label: "Import from URL",       description: "Fetch a skill definition from any public endpoint.",  icon: <Globe size={15} /> },
   { id: "skillssh",  label: "Import from skills.sh", description: "Browse and install verified community skills.",       icon: <Package size={15} /> },
 ];
 
-function SkillCard({ skill, onDelete }: { skill: SkillEntry; onDelete: () => void }) {
+function statusColor(status?: string) {
+  switch (status) {
+    case "active":     return "bg-emerald-500/10 text-emerald-400";
+    case "deprecated": return "bg-amber-500/10 text-amber-400";
+    default:           return "bg-muted/60 text-muted-foreground";
+  }
+}
+
+function SkillCard({
+  skill, onDelete, onDuplicate,
+}: { skill: SkillDefinition; onDelete: () => void; onDuplicate: () => void }) {
   return (
     <div className="group relative rounded-lg border border-border bg-card p-4 hover:border-[var(--grace-accent)]/40 transition-colors">
-      <button type="button" onClick={onDelete}
-        className="absolute top-2 right-2 flex items-center justify-center w-6 h-6 rounded text-muted-foreground/20 hover:text-destructive hover:bg-destructive/10 transition-all opacity-0 group-hover:opacity-100"
-        title="Remove skill">
-        <Trash2 size={11} />
-      </button>
-      <div className="flex items-start gap-3 pr-6">
+      <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button type="button" onClick={onDuplicate}
+          className="flex items-center justify-center w-6 h-6 rounded text-muted-foreground/30 hover:text-[var(--grace-accent)] hover:bg-[var(--grace-accent-muted)] transition-all"
+          title="Duplicate skill">
+          <Copy size={11} />
+        </button>
+        <button type="button" onClick={onDelete}
+          className="flex items-center justify-center w-6 h-6 rounded text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-all"
+          title="Remove skill">
+          <Trash2 size={11} />
+        </button>
+      </div>
+      <div className="flex items-start gap-3 pr-14">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--grace-accent)]/30 bg-[var(--grace-accent-muted)]">
           <Zap size={14} className="text-[var(--grace-accent)]" />
         </div>
@@ -86,13 +58,21 @@ function SkillCard({ skill, onDelete }: { skill: SkillEntry; onDelete: () => voi
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-semibold">{skill.name}</span>
             <span className="text-[10px] rounded bg-muted/60 px-1.5 py-0.5 text-muted-foreground font-mono">v{skill.version}</span>
-            <span className="text-[10px] rounded bg-[var(--grace-accent-muted)] px-1.5 py-0.5 text-[var(--grace-accent)]">{skill.source}</span>
+            {skill.status && (
+              <span className={cn("text-[10px] rounded px-1.5 py-0.5", statusColor(skill.status))}>{skill.status}</span>
+            )}
+            {skill.source && (
+              <span className="text-[10px] rounded bg-[var(--grace-accent-muted)] px-1.5 py-0.5 text-[var(--grace-accent)]">{skill.source}</span>
+            )}
           </div>
-          <p className="mt-1 text-xs text-muted-foreground leading-snug line-clamp-2">{skill.description}</p>
+          <p className="mt-1 text-xs text-muted-foreground leading-snug line-clamp-2">{skill.description || <em className="opacity-40">No description</em>}</p>
           <div className="mt-2 flex flex-wrap items-center gap-1">
-            {skill.capabilities.map((cap) => (
-              <span key={cap} className="text-[9px] rounded border border-border/60 bg-muted/30 px-1.5 py-0.5 text-muted-foreground">{cap}</span>
+            {skill.tags.slice(0, 4).map((tag) => (
+              <span key={tag} className="text-[9px] rounded border border-border/60 bg-muted/30 px-1.5 py-0.5 text-muted-foreground">{tag}</span>
             ))}
+            {skill.category && (
+              <span className="text-[9px] rounded bg-muted/40 px-1.5 py-0.5 text-muted-foreground/60">{skill.category}</span>
+            )}
             <IdBadge id={skill.id} className="ml-auto" />
           </div>
         </div>
@@ -101,7 +81,9 @@ function SkillCard({ skill, onDelete }: { skill: SkillEntry; onDelete: () => voi
   );
 }
 
-function SkillRow({ skill, onDelete }: { skill: SkillEntry; onDelete: () => void }) {
+function SkillRow({
+  skill, onDelete, onDuplicate,
+}: { skill: SkillDefinition; onDelete: () => void; onDuplicate: () => void }) {
   return (
     <div className="group flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-2.5 hover:border-[var(--grace-accent)]/40 transition-colors">
       <Zap size={13} className="text-[var(--grace-accent)] shrink-0" />
@@ -110,26 +92,89 @@ function SkillRow({ skill, onDelete }: { skill: SkillEntry; onDelete: () => void
           <span className="text-sm font-semibold truncate">{skill.name}</span>
           <span className="text-[10px] text-muted-foreground/50 font-mono shrink-0">v{skill.version}</span>
         </div>
-        <span className="text-xs text-muted-foreground truncate">{skill.description}</span>
+        <span className="text-xs text-muted-foreground truncate">{skill.description || "—"}</span>
       </div>
       <IdBadge id={skill.id} />
-      <span className="text-[10px] rounded bg-muted/60 px-1.5 py-0.5 text-muted-foreground shrink-0">{skill.source}</span>
-      <button type="button" onClick={onDelete}
-        className="flex items-center justify-center w-7 h-7 rounded text-muted-foreground/20 hover:text-destructive hover:bg-destructive/10 transition-all opacity-0 group-hover:opacity-100 shrink-0">
-        <Trash2 size={12} />
-      </button>
+      {skill.status && (
+        <span className={cn("text-[10px] rounded px-1.5 py-0.5 shrink-0", statusColor(skill.status))}>{skill.status}</span>
+      )}
+      <span className="text-[10px] rounded bg-muted/60 px-1.5 py-0.5 text-muted-foreground shrink-0">{skill.source ?? "—"}</span>
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button type="button" onClick={onDuplicate}
+          className="flex items-center justify-center w-7 h-7 rounded text-muted-foreground/30 hover:text-[var(--grace-accent)] hover:bg-[var(--grace-accent-muted)] transition-all shrink-0">
+          <Copy size={12} />
+        </button>
+        <button type="button" onClick={onDelete}
+          className="flex items-center justify-center w-7 h-7 rounded text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-all shrink-0">
+          <Trash2 size={12} />
+        </button>
+      </div>
     </div>
   );
 }
 
-export function GraceSkills() {
-  const { selectedCompany, selectedCompanyId } = useCompany();
-  const prefix = selectedCompany?.issuePrefix ?? selectedCompanyId;
+// ── Create New Modal (minimal inline) ─────────────────────────────────────────
 
-  const [skills, setSkills] = useState<SkillEntry[]>(SAMPLE_SKILLS);
+function CreateSkillModal({ open, onClose, onCreate }: {
+  open: boolean;
+  onClose: () => void;
+  onCreate: (name: string, category: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("General");
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-xl">
+        <h2 className="text-base font-semibold mb-4">Create New Skill</h2>
+        <div className="space-y-3 mb-5">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Name</label>
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) onCreate(name.trim(), category); }}
+              placeholder="e.g. Data Extraction"
+              className="w-full rounded border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-[var(--grace-accent)]"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Category</label>
+            <input
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder="e.g. Research"
+              className="w-full rounded border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-[var(--grace-accent)]"
+            />
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2">
+          <button type="button" onClick={onClose}
+            className="rounded border border-border bg-muted/20 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+            Cancel
+          </button>
+          <button type="button"
+            disabled={!name.trim()}
+            onClick={() => name.trim() && onCreate(name.trim(), category)}
+            className="rounded bg-[var(--grace-accent)] px-4 py-1.5 text-xs font-medium text-white disabled:opacity-40 hover:opacity-90 transition-opacity">
+            Create
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+export function GraceSkills() {
+  const [refreshKey, setRefreshKey] = useState(0);
+  const skills = useMemo(() => skillService.getAll(), [refreshKey]);
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"card" | "list">("card");
-  const [deleteTarget, setDeleteTarget] = useState<SkillEntry | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SkillDefinition | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -137,13 +182,29 @@ export function GraceSkills() {
     return skills.filter((s) =>
       s.name.toLowerCase().includes(q) ||
       s.description.toLowerCase().includes(q) ||
-      s.capabilities.some((c) => c.includes(q))
+      s.tags.some((t) => t.toLowerCase().includes(q)) ||
+      (s.category ?? "").toLowerCase().includes(q)
     );
   }, [skills, search]);
 
-  function handleDelete(skill: SkillEntry) {
-    setSkills((prev) => prev.filter((s) => s.id !== skill.id));
+  const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+
+  function handleDelete(skill: SkillDefinition) {
+    skillService.remove(skill.id);
     setDeleteTarget(null);
+    refresh();
+  }
+
+  function handleDuplicate(skill: SkillDefinition) {
+    skillService.duplicate(skill.id);
+    refresh();
+  }
+
+  function handleCreate(name: string, category: string) {
+    const skeleton = skillService.createSkeleton(name, category);
+    skillService.add(skeleton);
+    setShowCreate(false);
+    refresh();
   }
 
   return (
@@ -151,27 +212,9 @@ export function GraceSkills() {
       <div className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Skills</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Skills extend agent capabilities. Browse, create, and import skills for your workspace.
+          Skills extend agent capabilities. Create, import, and manage skills for your workspace.
         </p>
       </div>
-
-      {prefix && (
-        <Link
-          to={`/${prefix}/skills`}
-          className="mb-6 flex items-center justify-between rounded-lg border border-border bg-card p-4 hover:border-[var(--grace-accent)] hover:bg-[var(--grace-accent-muted)] transition-colors group"
-        >
-          <div className="flex items-center gap-3">
-            <Zap size={18} className="text-[var(--grace-accent)]" />
-            <div>
-              <div className="text-sm font-medium group-hover:text-[var(--grace-accent)]">
-                {selectedCompany?.name ?? "Workspace"} Skills
-              </div>
-              <div className="text-xs text-muted-foreground mt-0.5">Manage skills for this workspace</div>
-            </div>
-          </div>
-          <ArrowRight size={14} className="text-muted-foreground group-hover:text-[var(--grace-accent)]" />
-        </Link>
-      )}
 
       {/* Registered skills */}
       <div className="mb-8">
@@ -203,23 +246,40 @@ export function GraceSkills() {
                 <List size={12} />
               </button>
             </div>
+            <button type="button" onClick={() => setShowCreate(true)}
+              className="flex items-center gap-1.5 rounded border border-[var(--grace-accent)]/40 bg-[var(--grace-accent-muted)] px-3 py-1.5 text-xs font-medium text-[var(--grace-accent)] hover:bg-[var(--grace-accent-muted)]/80 transition-colors">
+              <Plus size={11} />
+              New
+            </button>
           </div>
         </div>
 
         {filtered.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-card/50 p-6 text-center">
-            <p className="text-xs text-muted-foreground/60">No skills match your search.</p>
+            <p className="text-xs text-muted-foreground/60">
+              {search ? "No skills match your search." : "No skills registered yet. Create or import one below."}
+            </p>
           </div>
         ) : viewMode === "card" ? (
           <div className="grid gap-3 sm:grid-cols-2">
             {filtered.map((skill) => (
-              <SkillCard key={skill.id} skill={skill} onDelete={() => setDeleteTarget(skill)} />
+              <SkillCard
+                key={skill.id}
+                skill={skill}
+                onDelete={() => setDeleteTarget(skill)}
+                onDuplicate={() => handleDuplicate(skill)}
+              />
             ))}
           </div>
         ) : (
           <div className="space-y-1.5">
             {filtered.map((skill) => (
-              <SkillRow key={skill.id} skill={skill} onDelete={() => setDeleteTarget(skill)} />
+              <SkillRow
+                key={skill.id}
+                skill={skill}
+                onDelete={() => setDeleteTarget(skill)}
+                onDuplicate={() => handleDuplicate(skill)}
+              />
             ))}
           </div>
         )}
@@ -228,13 +288,13 @@ export function GraceSkills() {
       {/* Import sources */}
       <div className="mb-3 flex items-center gap-2">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Import Sources</p>
-        <span className="text-[10px] rounded bg-muted/60 px-1.5 py-0.5 text-muted-foreground">Phase 6</span>
+        <span className="text-[10px] rounded bg-muted/60 px-1.5 py-0.5 text-muted-foreground">coming soon</span>
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         {IMPORT_SOURCES.map((src) => (
           <div key={src.id}
-            className="flex items-start gap-3 rounded-lg border border-border bg-card p-3 opacity-50 cursor-not-allowed"
-            title="Coming in Phase 6">
+            className="flex items-start gap-3 rounded-lg border border-border bg-card p-3 opacity-40 cursor-not-allowed"
+            title="Not yet available">
             <div className="mt-0.5 shrink-0 text-muted-foreground/60">{src.icon}</div>
             <div className="min-w-0">
               <div className="text-sm font-medium text-muted-foreground">{src.label}</div>
@@ -244,10 +304,16 @@ export function GraceSkills() {
         ))}
       </div>
 
+      <CreateSkillModal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        onCreate={handleCreate}
+      />
+
       <ConfirmDialog
         open={!!deleteTarget}
         title="Remove Skill"
-        description={`Remove "${deleteTarget?.name ?? "this skill"}" from the registry? (Local change in Phase 5 — does not affect the backend.)`}
+        description={`Remove "${deleteTarget?.name ?? "this skill"}" from the registry? This is saved locally and will persist.`}
         confirmLabel="Remove"
         variant="warning"
         onConfirm={() => deleteTarget && handleDelete(deleteTarget)}

@@ -86,6 +86,32 @@ export interface ProviderSendResult {
   message?: string;
 }
 
+// ─── Provider capability model ────────────────────────────────────────────────
+
+/**
+ * ProviderCapabilities — explicitly tracks which runtime capabilities
+ * a provider actually supports. Use this to honestly communicate status
+ * in the UI rather than assuming all providers support everything.
+ *
+ * All fields default to false unless the provider implementation asserts them.
+ */
+export interface ProviderCapabilities {
+  /** Can test connectivity/health of the provider */
+  healthCheck: boolean;
+  /** Can dispatch a run (start execution) */
+  runDispatch: boolean;
+  /** Provider pushes real-time events over a stream (WebSocket/SSE) */
+  eventStream: boolean;
+  /** Provider supports polling for status updates */
+  eventPoll: boolean;
+  /** Provider supports interactive chat with an active run/agent */
+  chatInteraction: boolean;
+  /** Provider can enumerate available agents */
+  agentDiscovery: boolean;
+  /** Provider can list/retrieve output artifacts from a completed run */
+  outputListing: boolean;
+}
+
 // ─── Provider interface ───────────────────────────────────────────────────────
 
 export interface IProvider {

@@ -49,6 +49,16 @@ function evId(): string {
 }
 
 export const runService = {
+  /** Get all run records across all instances (newest first) */
+  getAll(): RunRecord[] {
+    return load();
+  },
+
+  /** Alias for getAllForInstance — used by Dashboard and similar surfaces */
+  getForInstance(instanceId: string): RunRecord[] {
+    return load().filter((r) => r.instanceId === instanceId);
+  },
+
   /** Get the most-recent run for an instance, regardless of status */
   getLatestRun(instanceId: string): RunRecord | null {
     const runs = load();

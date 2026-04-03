@@ -1,18 +1,18 @@
 /**
- * GraphCanvas — Phase 4
+ * GraphCanvas — Phase 6 (calm physics rewrite)
  *
- * Force-directed graph visualisation for Studio.
- * Uses a lightweight custom 2D physics simulation (no external deps).
+ * Changes from Phase 4:
+ *  - Physics settles and STOPS — no "shaken snow globe" behavior
+ *  - Selecting/hovering a node does NOT restart the simulation
+ *  - Rebuilds only when the set of node IDs actually changes
+ *  - Resize scales positions proportionally (no full rebuild)
+ *  - Draggable nodes with soft local settling
+ *  - Single stable RAF loop via stable useEffect([], []) + refs
  *
  * Node types: agent | step | skill | tool | output
  *   - agent nodes: diamond shape
  *     - linked=true  → solid stroke
  *     - linked=false → dashed stroke + dotted edge to steps
- *
- * Edges:
- *   - step → step        (solid)
- *   - agent → step       (solid if linked, dashed if not)
- *   - step → skill/tool  (solid)
  */
 
 import { useRef, useEffect, useCallback, useState } from "react";
@@ -40,6 +40,7 @@ interface GraphNode {
   vx: number;
   vy: number;
   radius: number;
+  pinned?: boolean;
 }
 
 interface GraphEdge {
@@ -73,12 +74,11 @@ function buildGraph(
     }
   }
 
-  // Position agents in an arc at the top of the canvas
   const agentSpread = agents.length > 1
     ? (Math.PI * 0.7) / (agents.length - 1)
     : 0;
   const agentStartAngle = -Math.PI / 2 - (agents.length > 1 ? (Math.PI * 0.35) : 0);
-  const agentR = Math.min(cx, cy) * 0.7;
+  const agentR = Math.min(cx, cy) * 0.55;
 
   agents.forEach((agent, i) => {
     const angle = agents.length === 1
@@ -89,16 +89,15 @@ function buildGraph(
       label: agent.label,
       type: "agent",
       linked: agent.linked,
-      x: cx + agentR * Math.cos(angle) + (Math.random() - 0.5) * 10,
-      y: cy + agentR * Math.sin(angle) + (Math.random() - 0.5) * 10,
+      x: cx + agentR * Math.cos(angle) + (Math.random() - 0.5) * 8,
+      y: cy + agentR * Math.sin(angle) + (Math.random() - 0.5) * 8,
       vx: 0, vy: 0,
       radius: 18,
     });
   });
 
-  // Steps in a ring slightly lower
   const angleSpread = steps.length > 1 ? (2 * Math.PI) / steps.length : 0;
-  const stepR = Math.min(cx, cy) * 0.38;
+  const stepR = Math.min(cx, cy) * 0.32;
 
   steps.forEach((step, i) => {
     const angle = i * angleSpread - Math.PI / 2 + (steps.length > 1 ? 0.15 : 0);
@@ -107,22 +106,20 @@ function buildGraph(
       label: step.name,
       type: "step",
       stepRef: step,
-      x: cx + stepR * Math.cos(angle) + (Math.random() - 0.5) * 20,
-      y: cy + stepR * Math.sin(angle) + (Math.random() - 0.5) * 20,
+      x: cx + stepR * Math.cos(angle) + (Math.random() - 0.5) * 16,
+      y: cy + stepR * Math.sin(angle) + (Math.random() - 0.5) * 16,
       vx: 0, vy: 0,
       radius: 22,
     });
 
-    // Step → step edges
     if (i > 0) {
       edges.push({
-        source: `step-${steps[i - 1].id}`,
+        source: `step-${steps[i - 1]!.id}`,
         target: `step-${step.id}`,
         linked: true,
       });
     }
 
-    // Agent → step edges: match by role
     agents.forEach((agent) => {
       const roleMatch =
         step.agentRole === agent.role ||
@@ -139,13 +136,12 @@ function buildGraph(
       }
     });
 
-    // If no agents at all, still show step→skill/tool
     step.skills?.forEach((skill) => {
       const sid = `skill-${skill.id}`;
       addNode({
         id: sid, label: skill.name, type: "skill",
-        x: cx + stepR * Math.cos(angle) + 70 + (Math.random() - 0.5) * 40,
-        y: cy + stepR * Math.sin(angle) - 35 + (Math.random() - 0.5) * 40,
+        x: cx + stepR * Math.cos(angle) + 65 + (Math.random() - 0.5) * 30,
+        y: cy + stepR * Math.sin(angle) - 30 + (Math.random() - 0.5) * 30,
         vx: 0, vy: 0, radius: 12,
       });
       edges.push({ source: `step-${step.id}`, target: sid, linked: true });
@@ -155,8 +151,8 @@ function buildGraph(
       const tid = `tool-${tool.id}`;
       addNode({
         id: tid, label: tool.name, type: "tool",
-        x: cx + stepR * Math.cos(angle) + 70 + (Math.random() - 0.5) * 40,
-        y: cy + stepR * Math.sin(angle) + 35 + (Math.random() - 0.5) * 40,
+        x: cx + stepR * Math.cos(angle) + 65 + (Math.random() - 0.5) * 30,
+        y: cy + stepR * Math.sin(angle) + 30 + (Math.random() - 0.5) * 30,
         vx: 0, vy: 0, radius: 11,
       });
       edges.push({ source: `step-${step.id}`, target: tid, linked: true });
@@ -168,27 +164,29 @@ function buildGraph(
 
 // ─── Physics ──────────────────────────────────────────────────────────────────
 
-const REPULSION = 2000;
-const SPRING_K = 0.04;
+const REPULSION = 2200;
+const SPRING_K = 0.035;
 const SPRING_REST_STEP = 120;
-const SPRING_REST_AGENT = 160;
-const SPRING_REST_LEAF = 70;
-const GRAVITY = 0.01;
-const DAMPING = 0.88;
-const MIN_DIST = 30;
+const SPRING_REST_AGENT = 150;
+const SPRING_REST_LEAF = 65;
+const GRAVITY = 0.008;
+const DAMPING = 0.82;  // higher = settles faster
+const MIN_DIST = 28;
+const SETTLED_THRESHOLD = 0.025;
 
 function tickPhysics(nodes: GraphNode[], edges: GraphEdge[], cx: number, cy: number) {
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
 
   for (let i = 0; i < nodes.length; i++) {
     for (let j = i + 1; j < nodes.length; j++) {
-      const a = nodes[i], b = nodes[j];
+      const a = nodes[i]!, b = nodes[j]!;
+      if (a.pinned && b.pinned) continue;
       const dx = b.x - a.x, dy = b.y - a.y;
       const dist = Math.max(Math.sqrt(dx * dx + dy * dy), MIN_DIST);
       const force = REPULSION / (dist * dist);
       const fx = (dx / dist) * force, fy = (dy / dist) * force;
-      a.vx -= fx; a.vy -= fy;
-      b.vx += fx; b.vy += fy;
+      if (!a.pinned) { a.vx -= fx; a.vy -= fy; }
+      if (!b.pinned) { b.vx += fx; b.vy += fy; }
     }
   }
 
@@ -203,11 +201,12 @@ function tickPhysics(nodes: GraphNode[], edges: GraphEdge[], cx: number, cy: num
     const stretch = dist - rest;
     const fx = (dx / dist) * stretch * SPRING_K;
     const fy = (dy / dist) * stretch * SPRING_K;
-    a.vx += fx; a.vy += fy;
-    b.vx -= fx; b.vy -= fy;
+    if (!a.pinned) { a.vx += fx; a.vy += fy; }
+    if (!b.pinned) { b.vx -= fx; b.vy -= fy; }
   }
 
   for (const n of nodes) {
+    if (n.pinned) continue;
     n.vx += (cx - n.x) * GRAVITY;
     n.vy += (cy - n.y) * GRAVITY;
     n.vx *= DAMPING;
@@ -215,6 +214,12 @@ function tickPhysics(nodes: GraphNode[], edges: GraphEdge[], cx: number, cy: num
     n.x += n.vx;
     n.y += n.vy;
   }
+}
+
+function computeEnergy(nodes: GraphNode[]): number {
+  let e = 0;
+  for (const n of nodes) e += Math.abs(n.vx) + Math.abs(n.vy);
+  return e;
 }
 
 // ─── Colours ──────────────────────────────────────────────────────────────────
@@ -226,6 +231,148 @@ const NODE_COLOR: Record<NodeType, string> = {
   tool:   "#60a5fa",
   output: "#fb923c",
 };
+
+// ─── Renderer ─────────────────────────────────────────────────────────────────
+
+function renderFrame(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+  hoveredId: string | null,
+  stepsArr: FlowStep[],
+) {
+  ctx.clearRect(0, 0, w, h);
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+
+  const incidentToHovered = new Set<string>();
+  if (hoveredId) {
+    edges.forEach((e) => {
+      if (e.source === hoveredId || e.target === hoveredId) {
+        incidentToHovered.add(e.source);
+        incidentToHovered.add(e.target);
+      }
+    });
+  }
+
+  // Draw edges
+  edges.forEach((edge) => {
+    const a = nodeMap.get(edge.source), b = nodeMap.get(edge.target);
+    if (!a || !b) return;
+
+    const isHighlighted = hoveredId && (edge.source === hoveredId || edge.target === hoveredId);
+    const alpha = hoveredId ? (isHighlighted ? 0.75 : 0.06) : 0.26;
+
+    ctx.save();
+    ctx.setLineDash(edge.dashed ? [5, 4] : []);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.strokeStyle = `rgba(167, 139, 250, ${alpha})`;
+    ctx.lineWidth = isHighlighted ? 1.5 : 1;
+    ctx.stroke();
+
+    if (isHighlighted) {
+      ctx.setLineDash([]);
+      const grad = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+      grad.addColorStop(0, "rgba(167,139,250,0)");
+      grad.addColorStop(0.5, "rgba(167,139,250,0.45)");
+      grad.addColorStop(1, "rgba(167,139,250,0)");
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+    ctx.restore();
+  });
+
+  // Draw nodes
+  nodes.forEach((node) => {
+    const isHov = node.id === hoveredId;
+    const isIncident = incidentToHovered.has(node.id);
+    const alpha = hoveredId ? (isHov || isIncident ? 1 : 0.28) : 1;
+    const color = NODE_COLOR[node.type];
+    const r = node.radius;
+
+    if (isHov) {
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r + 8, 0, Math.PI * 2);
+      ctx.fillStyle = color + "14";
+      ctx.fill();
+    }
+
+    if (node.type === "agent") {
+      ctx.save();
+      ctx.translate(node.x, node.y);
+      ctx.rotate(Math.PI / 4);
+      ctx.beginPath();
+      const s = r * 0.8;
+      ctx.rect(-s, -s, s * 2, s * 2);
+      ctx.fillStyle = color + (Math.round(alpha * 0x1a)).toString(16).padStart(2, "0");
+      ctx.fill();
+      if (node.linked === false) {
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = `rgba(150,130,200,${alpha * 0.5})`;
+      } else {
+        ctx.setLineDash([]);
+        ctx.strokeStyle = color + (Math.round(alpha * 0xcc)).toString(16).padStart(2, "0");
+      }
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+
+      const agentLabel = node.label.length > 14 ? node.label.slice(0, 12) + "…" : node.label;
+      const isLinked = node.linked !== false;
+      ctx.fillStyle = isLinked
+        ? `rgba(200,185,255,${alpha * 0.9})`
+        : `rgba(140,130,160,${alpha * 0.65})`;
+      ctx.font = `600 9px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(agentLabel, node.x, node.y - r - 4);
+
+      if (!isLinked) {
+        ctx.fillStyle = `rgba(120,110,140,${alpha * 0.5})`;
+        ctx.font = `8px sans-serif`;
+        ctx.textBaseline = "bottom";
+        ctx.fillText("unlinked", node.x, node.y - r - 14);
+      }
+
+    } else {
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = color + (Math.round(alpha * 0x16)).toString(16).padStart(2, "0");
+      ctx.fill();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = color + (Math.round(alpha * 0xbb)).toString(16).padStart(2, "0");
+      ctx.lineWidth = node.type === "step" ? 2 : 1.2;
+      ctx.stroke();
+
+      if (node.type === "step") {
+        ctx.fillStyle = `rgba(167,139,250,${alpha * 0.9})`;
+        ctx.font = "bold 9px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const idx = stepsArr.findIndex((s) => `step-${s.id}` === node.id);
+        if (idx >= 0) ctx.fillText(String(idx + 1), node.x, node.y);
+      }
+
+      const fontSize = node.type === "step" ? 10 : 9;
+      const maxLabelW = r * 3.5;
+      const label = node.label.length > 16 ? node.label.slice(0, 14) + "…" : node.label;
+      const yOff = r + fontSize + 2;
+      ctx.fillStyle = `rgba(${node.type === "step" ? "240,235,255" : "180,180,180"},${alpha * 0.82})`;
+      ctx.font = `${node.type === "step" ? "600 " : ""}${fontSize}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillText(label, node.x, node.y + yOff, maxLabelW);
+    }
+  });
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -240,202 +387,107 @@ export function GraphCanvas({ steps, agents, onStepInspect }: GraphCanvasProps) 
   const graphRef = useRef<GraphData>({ nodes: [], edges: [] });
   const rafRef = useRef<number>(0);
   const hoveredRef = useRef<string | null>(null);
+  const settledRef = useRef(false);
+  const lastNodeKeyRef = useRef("");
+  // Stable refs — always current, never cause callback recreation
+  const stepsRef = useRef(steps);
+  const agentsRef = useRef(agents);
+  const onInspectRef = useRef(onStepInspect);
+  const draggingRef = useRef<{ nodeId: string; startX: number; startY: number } | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const resize = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const { width, height } = canvas.getBoundingClientRect();
-    if (canvas.width !== width || canvas.height !== height) {
-      canvas.width = width;
-      canvas.height = height;
-    }
-  }, []);
+  // Keep refs in sync (does NOT recreate any callbacks)
+  stepsRef.current = steps;
+  agentsRef.current = agents;
+  onInspectRef.current = onStepInspect;
 
-  const initGraph = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    resize();
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
-    graphRef.current = buildGraph(steps, agents, cx, cy);
-  }, [steps, agents, resize]);
-
-  const draw = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    resize();
-    const { width, height } = canvas;
-    const { nodes, edges } = graphRef.current;
-    const cx = width / 2, cy = height / 2;
-
-    tickPhysics(nodes, edges, cx, cy);
-    ctx.clearRect(0, 0, width, height);
-
-    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-    const hov = hoveredRef.current;
-
-    const incidentToHovered = new Set<string>();
-    if (hov) {
-      edges.forEach((e) => {
-        if (e.source === hov || e.target === hov) {
-          incidentToHovered.add(e.source);
-          incidentToHovered.add(e.target);
-        }
-      });
-    }
-
-    // Draw edges
-    edges.forEach((edge) => {
-      const a = nodeMap.get(edge.source), b = nodeMap.get(edge.target);
-      if (!a || !b) return;
-
-      const isHighlighted = hov && (edge.source === hov || edge.target === hov);
-      const alpha = hov ? (isHighlighted ? 0.75 : 0.07) : 0.28;
-
-      ctx.save();
-      if (edge.dashed) {
-        ctx.setLineDash([5, 4]);
-      } else {
-        ctx.setLineDash([]);
-      }
-
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.strokeStyle = `rgba(167, 139, 250, ${alpha})`;
-      ctx.lineWidth = isHighlighted ? 1.5 : 1;
-      ctx.stroke();
-
-      if (isHighlighted) {
-        ctx.setLineDash([]);
-        const grad = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
-        grad.addColorStop(0, "rgba(167,139,250,0)");
-        grad.addColorStop(0.5, "rgba(167,139,250,0.5)");
-        grad.addColorStop(1, "rgba(167,139,250,0)");
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = 3;
-        ctx.stroke();
-      }
-      ctx.restore();
-    });
-
-    // Draw nodes
-    nodes.forEach((node) => {
-      const isHov = node.id === hov;
-      const isIncident = incidentToHovered.has(node.id);
-      const alpha = hov ? (isHov || isIncident ? 1 : 0.3) : 1;
-      const color = NODE_COLOR[node.type];
-      const r = node.radius;
-
-      if (isHov) {
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, r + 8, 0, Math.PI * 2);
-        ctx.fillStyle = color + "18";
-        ctx.fill();
-      }
-
-      if (node.type === "agent") {
-        ctx.save();
-        ctx.translate(node.x, node.y);
-        ctx.rotate(Math.PI / 4);
-        ctx.beginPath();
-        const s = r * 0.8;
-        ctx.rect(-s, -s, s * 2, s * 2);
-        ctx.fillStyle = color + (Math.round(alpha * 0x1a)).toString(16).padStart(2, "0");
-        ctx.fill();
-        // Dashed stroke for unlinked agents
-        if (node.linked === false) {
-          ctx.setLineDash([3, 3]);
-          ctx.strokeStyle = `rgba(150,130,200,${alpha * 0.55})`;
-        } else {
-          ctx.setLineDash([]);
-          ctx.strokeStyle = color + (Math.round(alpha * 0xcc)).toString(16).padStart(2, "0");
-        }
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.restore();
-
-        // Agent label above node
-        const agentLabel = node.label.length > 14 ? node.label.slice(0, 12) + "…" : node.label;
-        const isLinked = node.linked !== false;
-        ctx.fillStyle = isLinked
-          ? `rgba(200,185,255,${alpha * 0.9})`
-          : `rgba(140,130,160,${alpha * 0.7})`;
-        ctx.font = `600 9px sans-serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "bottom";
-        ctx.fillText(agentLabel, node.x, node.y - r - 4);
-
-        // "unlinked" sub-label
-        if (!isLinked) {
-          ctx.fillStyle = `rgba(120,110,140,${alpha * 0.5})`;
-          ctx.font = `8px sans-serif`;
-          ctx.textBaseline = "bottom";
-          ctx.fillText("unlinked", node.x, node.y - r - 14);
-        }
-
-      } else {
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = color + (Math.round(alpha * 0x18)).toString(16).padStart(2, "0");
-        ctx.fill();
-        ctx.setLineDash([]);
-        ctx.strokeStyle = color + (Math.round(alpha * 0xbb)).toString(16).padStart(2, "0");
-        ctx.lineWidth = node.type === "step" ? 2 : 1.2;
-        ctx.stroke();
-
-        if (node.type === "step") {
-          ctx.fillStyle = `rgba(167,139,250,${alpha * 0.9})`;
-          ctx.font = "bold 9px sans-serif";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          const idx = steps.findIndex((s) => `step-${s.id}` === node.id);
-          if (idx >= 0) ctx.fillText(String(idx + 1), node.x, node.y);
-        }
-
-        const fontSize = node.type === "step" ? 10 : 9;
-        const maxLabelW = r * 3.5;
-        const label = node.label.length > 16 ? node.label.slice(0, 14) + "…" : node.label;
-        const yOff = r + fontSize + 2;
-        ctx.fillStyle = `rgba(${node.type === "step" ? "240,235,255" : "180,180,180"},${alpha * 0.85})`;
-        ctx.font = `${node.type === "step" ? "600 " : ""}${fontSize}px sans-serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "top";
-        ctx.fillText(label, node.x, node.y + yOff, maxLabelW);
-      }
-    });
-
-    rafRef.current = requestAnimationFrame(draw);
-  }, [steps, agents, resize]);
-
+  // Rebuild graph only when the SET of node IDs changes
   useEffect(() => {
-    initGraph();
-    rafRef.current = requestAnimationFrame(draw);
-    const ro = new ResizeObserver(initGraph);
-    if (canvasRef.current) ro.observe(canvasRef.current.parentElement!);
-    return () => {
-      cancelAnimationFrame(rafRef.current);
-      ro.disconnect();
-    };
-  }, [initGraph, draw]);
+    const newKey = [
+      ...steps.map((s) => `s:${s.id}`),
+      ...agents.map((a) => `a:${a.id}`),
+    ].join("|");
+    if (newKey === lastNodeKeyRef.current) return;
+    lastNodeKeyRef.current = newKey;
 
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const r = canvas.getBoundingClientRect();
+    canvas.width = r.width || 600;
+    canvas.height = r.height || 400;
+    graphRef.current = buildGraph(steps, agents, canvas.width / 2, canvas.height / 2);
+    settledRef.current = false;
+  }, [steps, agents]);
+
+  // Single stable RAF loop — never recreated
+  useEffect(() => {
+    const tick = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) { rafRef.current = requestAnimationFrame(tick); return; }
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { rafRef.current = requestAnimationFrame(tick); return; }
+
+      // Handle resize by scaling positions (no rebuild)
+      const br = canvas.getBoundingClientRect();
+      const rw = Math.round(br.width);
+      const rh = Math.round(br.height);
+      if (rw > 0 && rh > 0 && (canvas.width !== rw || canvas.height !== rh)) {
+        const sx = rw / canvas.width;
+        const sy = rh / canvas.height;
+        for (const n of graphRef.current.nodes) {
+          n.x *= sx;
+          n.y *= sy;
+        }
+        canvas.width = rw;
+        canvas.height = rh;
+        settledRef.current = false;
+      }
+
+      const { nodes, edges } = graphRef.current;
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+
+      // Only run physics if not settled
+      if (!settledRef.current) {
+        tickPhysics(nodes, edges, cx, cy);
+        const energy = computeEnergy(nodes);
+        if (energy < nodes.length * SETTLED_THRESHOLD) {
+          for (const n of nodes) { n.vx = 0; n.vy = 0; }
+          settledRef.current = true;
+        }
+      }
+
+      renderFrame(ctx, canvas.width, canvas.height, nodes, edges, hoveredRef.current, stepsRef.current);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, []); // Intentionally empty — stable forever
+
+  // Mouse: hover (does NOT touch physics or settledRef)
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
-    const { nodes } = graphRef.current;
+
+    // Handle drag
+    if (draggingRef.current) {
+      const node = graphRef.current.nodes.find((n) => n.id === draggingRef.current!.nodeId);
+      if (node) {
+        node.x = mx;
+        node.y = my;
+        node.vx = 0;
+        node.vy = 0;
+        // Allow gentle local re-settling around dragged node only
+        settledRef.current = false;
+      }
+      return;
+    }
+
     let found: string | null = null;
-    for (const n of nodes) {
+    for (const n of graphRef.current.nodes) {
       const dx = n.x - mx, dy = n.y - my;
       if (Math.sqrt(dx * dx + dy * dy) < n.radius + 6) { found = n.id; break; }
     }
@@ -446,23 +498,46 @@ export function GraphCanvas({ steps, agents, onStepInspect }: GraphCanvasProps) 
   const handleMouseLeave = useCallback(() => {
     hoveredRef.current = null;
     setHoveredId(null);
+    draggingRef.current = null;
   }, []);
 
-  const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
-    const { nodes } = graphRef.current;
-    for (const n of nodes) {
+    for (const n of graphRef.current.nodes) {
       const dx = n.x - mx, dy = n.y - my;
       if (Math.sqrt(dx * dx + dy * dy) < n.radius + 6) {
-        if (n.stepRef) onStepInspect(n.stepRef);
+        draggingRef.current = { nodeId: n.id, startX: mx, startY: my };
         break;
       }
     }
-  }, [onStepInspect]);
+  }, []);
+
+  const handleMouseUp = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!draggingRef.current) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const startX = draggingRef.current.startX;
+    const startY = draggingRef.current.startY;
+    draggingRef.current = null;
+
+    // If barely moved, treat as click
+    if (Math.abs(mx - startX) < 5 && Math.abs(my - startY) < 5) {
+      for (const n of graphRef.current.nodes) {
+        const dx = n.x - mx, dy = n.y - my;
+        if (Math.sqrt(dx * dx + dy * dy) < n.radius + 6) {
+          if (n.stepRef) onInspectRef.current(n.stepRef);
+          break;
+        }
+      }
+    }
+  }, []);
 
   if (steps.length === 0) {
     return (
@@ -477,10 +552,11 @@ export function GraphCanvas({ steps, agents, onStepInspect }: GraphCanvasProps) 
       <canvas
         ref={canvasRef}
         className="absolute inset-0 w-full h-full"
-        style={{ cursor: hoveredId ? "pointer" : "default" }}
+        style={{ cursor: draggingRef.current ? "grabbing" : hoveredId ? "pointer" : "default" }}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        onClick={handleClick}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
       />
       {/* Legend */}
       <div className="absolute bottom-3 left-3 flex items-center gap-3 pointer-events-none select-none">
@@ -506,7 +582,7 @@ export function GraphCanvas({ steps, agents, onStepInspect }: GraphCanvasProps) 
           </div>
         ))}
         <span className="text-[9px] text-muted-foreground/25 ml-1">
-          click step · agent dashed = unlinked
+          drag to reposition · click step to inspect
         </span>
       </div>
     </div>

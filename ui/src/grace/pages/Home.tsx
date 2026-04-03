@@ -22,21 +22,9 @@ const QUICK_LINKS: QuickLink[] = [
   { label: "Tools",       description: "Configure tools available to agents",                to: "/grace/tools",      icon: <Wrench size={20} /> },
   { label: "Outputs",     description: "Review artifacts and outputs from runs",             to: "/grace/outputs",    icon: <FolderOpen size={20} /> },
   { label: "Library",     description: "Shared resources, knowledge bases, and documents",   to: "/grace/knowledge",  icon: <LibraryBig size={20} /> },
-  {
-    label: "Dashboard",
-    description: "High-level metrics and activity across all workflows",
-    to: "#", icon: <LayoutDashboard size={20} />, comingSoon: true,
-  },
-  {
-    label: "Strategic Management",
-    description: "Project and programme management across agent operations",
-    to: "#", icon: <Kanban size={20} />, comingSoon: true,
-  },
-  {
-    label: "Roster / Org",
-    description: "Team roster, organisational structure, and role assignments",
-    to: "#", icon: <Users size={20} />, comingSoon: true,
-  },
+  { label: "Dashboard", description: "High-level metrics and activity across all workflows", to: "/grace/dashboard", icon: <LayoutDashboard size={20} /> },
+  { label: "Org & Team",   description: "Organisation structure, team members, and role assignments", to: "/grace/org", icon: <Users size={20} /> },
+  { label: "Strategic Management", description: "Project and programme management across agent operations", to: "#", icon: <Kanban size={20} />, comingSoon: true },
 ];
 
 function ActiveCard({ link }: { link: QuickLink }) {

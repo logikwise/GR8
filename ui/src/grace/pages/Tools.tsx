@@ -1,67 +1,24 @@
 /**
- * Tools — Phase 5
+ * Tools — Phase 6
  *
- * Improvements:
- *  - Search/filter/view toggle for registered tools
- *  - Sample tool entries
- *  - Delete with ConfirmDialog
- *  - Import source cards (deferred to Phase 6)
- *
- * TODO (Phase 6): Replace mock data with GET /api/tools.
+ * Fully persisted via toolService (grace.tools.v1).
+ * Supports: create new skeleton, duplicate, delete with confirm.
+ * All changes survive refresh and deep-linking.
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   Wrench, Plus, Upload, GitBranch, Globe, Package,
-  Server, Puzzle, Search, LayoutGrid, List, Trash2, X,
+  Server, Puzzle, Search, LayoutGrid, List, Trash2, X, Copy,
 } from "lucide-react";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { IdBadge } from "../components/IdBadge";
 import { cn } from "@/lib/utils";
-
-interface ToolEntry {
-  id: string;
-  name: string;
-  description: string;
-  version: string;
-  provider: string;
-  status: "active" | "inactive";
-  createdAt: string;
-}
-
-const SAMPLE_TOOLS: ToolEntry[] = [
-  {
-    id: "tool-file-io",
-    name: "File I/O",
-    description: "Read and write files from the workspace filesystem. Supports streaming reads for large files.",
-    version: "1.0.0",
-    provider: "built-in",
-    status: "active",
-    createdAt: "2024-11-01",
-  },
-  {
-    id: "tool-http-request",
-    name: "HTTP Request",
-    description: "Make GET, POST, PUT, DELETE requests to external APIs with configurable headers and timeout.",
-    version: "2.1.0",
-    provider: "built-in",
-    status: "active",
-    createdAt: "2024-12-01",
-  },
-  {
-    id: "tool-code-exec",
-    name: "Code Executor",
-    description: "Execute sandboxed code snippets in Python, JS, or Bash and return stdout/stderr.",
-    version: "0.8.2",
-    provider: "plugin",
-    status: "inactive",
-    createdAt: "2025-01-15",
-  },
-];
+import { toolService } from "../tools/toolService";
+import type { ToolDefinition } from "../tools/toolTypes";
 
 const IMPORT_SOURCES = [
   { id: "register",  label: "Register Tool",       description: "Define a new tool endpoint and configure its input/output schema.", icon: <Server size={15} /> },
-  { id: "create",    label: "Create New",           description: "Scaffold a new tool from a template with metadata and schema.",     icon: <Plus size={15} /> },
   { id: "upload",    label: "Upload / Import File",  description: "Import a tool definition from a .json or .yaml package.",          icon: <Upload size={15} /> },
   { id: "git",       label: "Import from Git",       description: "Pull a tool directly from a Git repository.",                      icon: <GitBranch size={15} /> },
   { id: "url",       label: "Import from URL",       description: "Fetch a tool definition from any public endpoint.",                icon: <Globe size={15} /> },
@@ -69,20 +26,41 @@ const IMPORT_SOURCES = [
   { id: "community", label: "Community Tools",      description: "Browse and install verified community-built tools.",               icon: <Package size={15} /> },
 ];
 
-const STATUS_STYLES: Record<ToolEntry["status"], string> = {
-  active:   "bg-emerald-500/10 text-emerald-600",
-  inactive: "bg-muted/60 text-muted-foreground",
-};
+function statusColor(status?: string) {
+  switch (status) {
+    case "active":     return "bg-emerald-500/10 text-emerald-400";
+    case "deprecated": return "bg-amber-500/10 text-amber-400";
+    default:           return "bg-muted/60 text-muted-foreground";
+  }
+}
 
-function ToolCard({ tool, onDelete }: { tool: ToolEntry; onDelete: () => void }) {
+function execTypeColor(et?: string) {
+  switch (et) {
+    case "api":      return "text-blue-400";
+    case "local":    return "text-emerald-400";
+    case "provider": return "text-violet-400";
+    default:         return "text-muted-foreground/50";
+  }
+}
+
+function ToolCard({
+  tool, onDelete, onDuplicate,
+}: { tool: ToolDefinition; onDelete: () => void; onDuplicate: () => void }) {
   return (
     <div className="group relative rounded-lg border border-border bg-card p-4 hover:border-[var(--grace-accent)]/40 transition-colors">
-      <button type="button" onClick={onDelete}
-        className="absolute top-2 right-2 flex items-center justify-center w-6 h-6 rounded text-muted-foreground/20 hover:text-destructive hover:bg-destructive/10 transition-all opacity-0 group-hover:opacity-100"
-        title="Remove tool">
-        <Trash2 size={11} />
-      </button>
-      <div className="flex items-start gap-3 pr-6">
+      <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button type="button" onClick={onDuplicate}
+          className="flex items-center justify-center w-6 h-6 rounded text-muted-foreground/30 hover:text-[var(--grace-accent)] hover:bg-[var(--grace-accent-muted)] transition-all"
+          title="Duplicate tool">
+          <Copy size={11} />
+        </button>
+        <button type="button" onClick={onDelete}
+          className="flex items-center justify-center w-6 h-6 rounded text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-all"
+          title="Remove tool">
+          <Trash2 size={11} />
+        </button>
+      </div>
+      <div className="flex items-start gap-3 pr-14">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/30">
           <Wrench size={14} className="text-muted-foreground" />
         </div>
@@ -90,11 +68,21 @@ function ToolCard({ tool, onDelete }: { tool: ToolEntry; onDelete: () => void })
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-semibold">{tool.name}</span>
             <span className="text-[10px] rounded bg-muted/60 px-1.5 py-0.5 text-muted-foreground font-mono">v{tool.version}</span>
-            <span className={cn("text-[10px] rounded px-1.5 py-0.5", STATUS_STYLES[tool.status])}>{tool.status}</span>
+            {tool.status && (
+              <span className={cn("text-[10px] rounded px-1.5 py-0.5", statusColor(tool.status))}>{tool.status}</span>
+            )}
+            {tool.executionType && (
+              <span className={cn("text-[10px] font-medium", execTypeColor(tool.executionType))}>{tool.executionType}</span>
+            )}
           </div>
-          <p className="mt-1 text-xs text-muted-foreground leading-snug line-clamp-2">{tool.description}</p>
-          <div className="mt-1.5 flex items-center gap-2">
-            <span className="text-[9px] rounded bg-muted/40 px-1.5 py-0.5 text-muted-foreground/70">{tool.provider}</span>
+          <p className="mt-1 text-xs text-muted-foreground leading-snug line-clamp-2">{tool.description || <em className="opacity-40">No description</em>}</p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+            {tool.tags.slice(0, 3).map((tag) => (
+              <span key={tag} className="text-[9px] rounded border border-border/60 bg-muted/30 px-1.5 py-0.5 text-muted-foreground">{tag}</span>
+            ))}
+            {tool.source && (
+              <span className="text-[9px] rounded bg-muted/40 px-1.5 py-0.5 text-muted-foreground/60">{tool.source}</span>
+            )}
             <IdBadge id={tool.id} className="ml-auto" />
           </div>
         </div>
@@ -103,7 +91,9 @@ function ToolCard({ tool, onDelete }: { tool: ToolEntry; onDelete: () => void })
   );
 }
 
-function ToolRow({ tool, onDelete }: { tool: ToolEntry; onDelete: () => void }) {
+function ToolRow({
+  tool, onDelete, onDuplicate,
+}: { tool: ToolDefinition; onDelete: () => void; onDuplicate: () => void }) {
   return (
     <div className="group flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-2.5 hover:border-[var(--grace-accent)]/40 transition-colors">
       <Wrench size={13} className="text-muted-foreground/50 shrink-0" />
@@ -112,24 +102,89 @@ function ToolRow({ tool, onDelete }: { tool: ToolEntry; onDelete: () => void }) 
           <span className="text-sm font-semibold truncate">{tool.name}</span>
           <span className="text-[10px] text-muted-foreground/50 font-mono shrink-0">v{tool.version}</span>
         </div>
-        <span className="text-xs text-muted-foreground truncate">{tool.description}</span>
+        <span className="text-xs text-muted-foreground truncate">{tool.description || "—"}</span>
       </div>
       <IdBadge id={tool.id} />
-      <span className={cn("text-[10px] rounded px-1.5 py-0.5 shrink-0", STATUS_STYLES[tool.status])}>{tool.status}</span>
-      <span className="text-[10px] rounded bg-muted/60 px-1.5 py-0.5 text-muted-foreground shrink-0">{tool.provider}</span>
-      <button type="button" onClick={onDelete}
-        className="flex items-center justify-center w-7 h-7 rounded text-muted-foreground/20 hover:text-destructive hover:bg-destructive/10 transition-all opacity-0 group-hover:opacity-100 shrink-0">
-        <Trash2 size={12} />
-      </button>
+      {tool.status && (
+        <span className={cn("text-[10px] rounded px-1.5 py-0.5 shrink-0", statusColor(tool.status))}>{tool.status}</span>
+      )}
+      <span className="text-[10px] rounded bg-muted/60 px-1.5 py-0.5 text-muted-foreground shrink-0">{tool.source ?? "—"}</span>
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button type="button" onClick={onDuplicate}
+          className="flex items-center justify-center w-7 h-7 rounded text-muted-foreground/30 hover:text-[var(--grace-accent)] hover:bg-[var(--grace-accent-muted)] transition-all shrink-0">
+          <Copy size={12} />
+        </button>
+        <button type="button" onClick={onDelete}
+          className="flex items-center justify-center w-7 h-7 rounded text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-all shrink-0">
+          <Trash2 size={12} />
+        </button>
+      </div>
     </div>
   );
 }
 
+// ── Create New Modal ───────────────────────────────────────────────────────────
+
+function CreateToolModal({ open, onClose, onCreate }: {
+  open: boolean;
+  onClose: () => void;
+  onCreate: (name: string, category: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("General");
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-xl">
+        <h2 className="text-base font-semibold mb-4">Create New Tool</h2>
+        <div className="space-y-3 mb-5">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Name</label>
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) onCreate(name.trim(), category); }}
+              placeholder="e.g. PDF Reader"
+              className="w-full rounded border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-[var(--grace-accent)]"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Category</label>
+            <input
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder="e.g. Filesystem"
+              className="w-full rounded border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-[var(--grace-accent)]"
+            />
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2">
+          <button type="button" onClick={onClose}
+            className="rounded border border-border bg-muted/20 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+            Cancel
+          </button>
+          <button type="button"
+            disabled={!name.trim()}
+            onClick={() => name.trim() && onCreate(name.trim(), category)}
+            className="rounded bg-[var(--grace-accent)] px-4 py-1.5 text-xs font-medium text-white disabled:opacity-40 hover:opacity-90 transition-opacity">
+            Create
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export function GraceTools() {
-  const [tools, setTools] = useState<ToolEntry[]>(SAMPLE_TOOLS);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const tools = useMemo(() => toolService.getAll(), [refreshKey]);
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"card" | "list">("card");
-  const [deleteTarget, setDeleteTarget] = useState<ToolEntry | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ToolDefinition | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -137,13 +192,30 @@ export function GraceTools() {
     return tools.filter((t) =>
       t.name.toLowerCase().includes(q) ||
       t.description.toLowerCase().includes(q) ||
-      t.provider.toLowerCase().includes(q)
+      t.tags.some((tag) => tag.toLowerCase().includes(q)) ||
+      (t.source ?? "").toLowerCase().includes(q) ||
+      (t.category ?? "").toLowerCase().includes(q)
     );
   }, [tools, search]);
 
-  function handleDelete(tool: ToolEntry) {
-    setTools((prev) => prev.filter((t) => t.id !== tool.id));
+  const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+
+  function handleDelete(tool: ToolDefinition) {
+    toolService.remove(tool.id);
     setDeleteTarget(null);
+    refresh();
+  }
+
+  function handleDuplicate(tool: ToolDefinition) {
+    toolService.duplicate(tool.id);
+    refresh();
+  }
+
+  function handleCreate(name: string, category: string) {
+    const skeleton = toolService.createSkeleton(name, category);
+    toolService.add(skeleton);
+    setShowCreate(false);
+    refresh();
   }
 
   return (
@@ -184,23 +256,40 @@ export function GraceTools() {
                 <List size={12} />
               </button>
             </div>
+            <button type="button" onClick={() => setShowCreate(true)}
+              className="flex items-center gap-1.5 rounded border border-[var(--grace-accent)]/40 bg-[var(--grace-accent-muted)] px-3 py-1.5 text-xs font-medium text-[var(--grace-accent)] hover:bg-[var(--grace-accent-muted)]/80 transition-colors">
+              <Plus size={11} />
+              New
+            </button>
           </div>
         </div>
 
         {filtered.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-card/50 p-6 text-center">
-            <p className="text-xs text-muted-foreground/60">No tools match your search.</p>
+            <p className="text-xs text-muted-foreground/60">
+              {search ? "No tools match your search." : "No tools registered yet. Create or import one below."}
+            </p>
           </div>
         ) : viewMode === "card" ? (
           <div className="grid gap-3 sm:grid-cols-2">
             {filtered.map((tool) => (
-              <ToolCard key={tool.id} tool={tool} onDelete={() => setDeleteTarget(tool)} />
+              <ToolCard
+                key={tool.id}
+                tool={tool}
+                onDelete={() => setDeleteTarget(tool)}
+                onDuplicate={() => handleDuplicate(tool)}
+              />
             ))}
           </div>
         ) : (
           <div className="space-y-1.5">
             {filtered.map((tool) => (
-              <ToolRow key={tool.id} tool={tool} onDelete={() => setDeleteTarget(tool)} />
+              <ToolRow
+                key={tool.id}
+                tool={tool}
+                onDelete={() => setDeleteTarget(tool)}
+                onDuplicate={() => handleDuplicate(tool)}
+              />
             ))}
           </div>
         )}
@@ -208,13 +297,13 @@ export function GraceTools() {
 
       <div className="mb-3 flex items-center gap-2">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Import Sources</p>
-        <span className="text-[10px] rounded bg-muted/60 px-1.5 py-0.5 text-muted-foreground">Phase 6</span>
+        <span className="text-[10px] rounded bg-muted/60 px-1.5 py-0.5 text-muted-foreground">coming soon</span>
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         {IMPORT_SOURCES.map((src) => (
           <div key={src.id}
-            className="flex items-start gap-3 rounded-lg border border-border bg-card p-3 opacity-50 cursor-not-allowed"
-            title="Coming in Phase 6">
+            className="flex items-start gap-3 rounded-lg border border-border bg-card p-3 opacity-40 cursor-not-allowed"
+            title="Not yet available">
             <div className="mt-0.5 shrink-0 text-muted-foreground/60">{src.icon}</div>
             <div className="min-w-0">
               <div className="text-sm font-medium text-muted-foreground">{src.label}</div>
@@ -224,10 +313,16 @@ export function GraceTools() {
         ))}
       </div>
 
+      <CreateToolModal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        onCreate={handleCreate}
+      />
+
       <ConfirmDialog
         open={!!deleteTarget}
         title="Remove Tool"
-        description={`Remove "${deleteTarget?.name ?? "this tool"}" from the registry? (Local change in Phase 5 — does not affect the backend.)`}
+        description={`Remove "${deleteTarget?.name ?? "this tool"}" from the registry? This is saved locally and will persist.`}
         confirmLabel="Remove"
         variant="warning"
         onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
