@@ -3,7 +3,6 @@ import {
   Zap, Layers, BookOpen, Cpu, Wrench, FolderOpen, LibraryBig,
   Kanban, LayoutDashboard, Users,
 } from "lucide-react";
-import { PatternPicker } from "../components/PatternPicker";
 import { cn } from "@/lib/utils";
 
 interface QuickLink {
@@ -15,72 +14,29 @@ interface QuickLink {
 }
 
 const QUICK_LINKS: QuickLink[] = [
-  {
-    label: "Workflows",
-    description: "Browse and manage blueprint workflows",
-    to: "/grace/library",
-    icon: <BookOpen size={20} />,
-  },
-  {
-    label: "Instances",
-    description: "View and manage workflow instances",
-    to: "/grace/instances",
-    icon: <Layers size={20} />,
-  },
-  {
-    label: "Studio",
-    description: "Build and observe agent workflows",
-    to: "/grace/studio",
-    icon: <Cpu size={20} />,
-  },
-  {
-    label: "Skills",
-    description: "Manage agent skills and capabilities",
-    to: "/grace/skills",
-    icon: <Zap size={20} />,
-  },
-  {
-    label: "Tools",
-    description: "Configure tools available to agents",
-    to: "/grace/tools",
-    icon: <Wrench size={20} />,
-  },
-  {
-    label: "Outputs",
-    description: "Review artifacts and outputs from runs",
-    to: "/grace/outputs",
-    icon: <FolderOpen size={20} />,
-  },
-  {
-    label: "Library",
-    description: "Shared resources, knowledge bases, and documents",
-    to: "/grace/knowledge",
-    icon: <LibraryBig size={20} />,
-  },
+  { label: "Workflows",   description: "Browse and manage blueprint workflows",              to: "/grace/library",    icon: <BookOpen size={20} /> },
+  { label: "Instances",   description: "View and manage workflow instances",                 to: "/grace/instances",  icon: <Layers size={20} /> },
+  { label: "Studio",      description: "Build and observe agent workflows",                  to: "/grace/studio",     icon: <Cpu size={20} /> },
+  { label: "Skills",      description: "Manage agent skills and capabilities",               to: "/grace/skills",     icon: <Zap size={20} /> },
+  { label: "Tools",       description: "Configure tools available to agents",                to: "/grace/tools",      icon: <Wrench size={20} /> },
+  { label: "Outputs",     description: "Review artifacts and outputs from runs",             to: "/grace/outputs",    icon: <FolderOpen size={20} /> },
+  { label: "Library",     description: "Shared resources, knowledge bases, and documents",   to: "/grace/knowledge",  icon: <LibraryBig size={20} /> },
   {
     label: "Dashboard",
     description: "High-level metrics and activity across all workflows",
-    to: "#",
-    icon: <LayoutDashboard size={20} />,
-    comingSoon: true,
+    to: "#", icon: <LayoutDashboard size={20} />, comingSoon: true,
   },
   {
     label: "Strategic Management",
     description: "Project and programme management across agent operations",
-    to: "#",
-    icon: <Kanban size={20} />,
-    comingSoon: true,
+    to: "#", icon: <Kanban size={20} />, comingSoon: true,
   },
   {
     label: "Roster / Org",
     description: "Team roster, organisational structure, and role assignments",
-    to: "#",
-    icon: <Users size={20} />,
-    comingSoon: true,
+    to: "#", icon: <Users size={20} />, comingSoon: true,
   },
 ];
-
-// ─── Card variants ─────────────────────────────────────────────────────────────
 
 function ActiveCard({ link }: { link: QuickLink }) {
   return (
@@ -90,9 +46,7 @@ function ActiveCard({ link }: { link: QuickLink }) {
     >
       <div className="mt-0.5 shrink-0 text-[var(--grace-accent)]">{link.icon}</div>
       <div>
-        <div className="text-sm font-medium text-foreground group-hover:text-[var(--grace-accent)]">
-          {link.label}
-        </div>
+        <div className="text-sm font-medium text-foreground group-hover:text-[var(--grace-accent)]">{link.label}</div>
         <div className="mt-0.5 text-xs text-muted-foreground">{link.description}</div>
       </div>
     </Link>
@@ -116,8 +70,6 @@ function ComingSoonCard({ link }: { link: QuickLink }) {
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export function GraceHome() {
   return (
     <div className="min-h-full flex flex-col">
@@ -135,11 +87,6 @@ export function GraceHome() {
         <p className="text-sm text-muted-foreground/50">
           Design, orchestrate, and observe AI agent workflows at any scale.
         </p>
-      </div>
-
-      {/* ── Pattern picker ────────────────────────────────────────────────── */}
-      <div className="px-10 pb-10">
-        <PatternPicker />
       </div>
 
       {/* ── Divider ───────────────────────────────────────────────────────── */}

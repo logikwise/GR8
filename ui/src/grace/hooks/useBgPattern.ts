@@ -3,7 +3,6 @@
  *
  * Manages the GRACE app background pattern preference.
  * Persists choice to localStorage under `grace.bgPattern`.
- * Returns the current pattern key, a setter, and the CSS style object to spread.
  */
 
 import { useState, useCallback } from "react";
@@ -13,18 +12,36 @@ export type BgPatternKey = "none" | "hex" | "dots" | "grid" | "cross";
 const STORAGE_KEY = "grace.bgPattern";
 
 // ─── Pattern definitions ──────────────────────────────────────────────────────
-// All patterns use neutral mid-grey strokes/fills so they read subtly in both
-// dark and light mode. Adjust fill-opacity / rgba alpha for more/less intensity.
+// Patterns use neutral mid-grey so they work in both dark and light mode.
+//
+// HEX: stroke-only hex outlines (fill='none'), scaled to 42×73 so hexagons
+//      are clearly readable (~20px across) rather than blurred fill-blobs.
 
-const HEX_SVG = `%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%23808080' fill-opacity='0.07' fill-rule='nonzero'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15zm0 15l13 7.5v15l-13 7.5L1 46.75v-15zm26 0l13 7.5v15l-13 7.5-13-7.5v-15zm-13-15l13 7.5v15l-13 7.5-13-7.5v-15zm13-15l13 7.5v15l-13 7.5-13-7.5v-15z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E`;
+const HEX_SVG = [
+  `%3Csvg xmlns='http://www.w3.org/2000/svg'`,
+  ` width='42' height='74' viewBox='0 0 28 49'%3E`,
+  `%3Cpath`,
+  ` d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15z`,
+  `M13.99 24.25l13 7.5v15l-13 7.5L1 46.75v-15z`,
+  `M39.99 24.25l13 7.5v15l-13 7.5-13-7.5v-15z`,
+  `M26.99 9.25l13 7.5v15l-13 7.5-13-7.5v-15z`,
+  `M39.99 9.25l13 7.5v15l-13 7.5-13-7.5v-15z'`,
+  ` fill='none'`,
+  ` stroke='rgba(128,128,128,0.15)'`,
+  ` stroke-width='0.6'/%3E`,
+  `%3C/svg%3E`,
+].join("");
 
-const CROSS_SVG = `%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cpath d='M9 0h2v20H9zm-9 9h20v2H0z' fill='%23808080' fill-opacity='0.07'/%3E%3C/svg%3E`;
+const CROSS_SVG = [
+  `%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E`,
+  `%3Cpath d='M9 0h2v20H9zm-9 9h20v2H0z'`,
+  ` fill='rgba(128,128,128,0.08)'/%3E`,
+  `%3C/svg%3E`,
+].join("");
 
 export interface PatternDef {
   label: string;
-  /** Tooltip / description */
   hint: string;
-  /** CSS properties to apply to the background element */
   style: React.CSSProperties;
 }
 
@@ -36,10 +53,10 @@ export const BG_PATTERNS: Record<BgPatternKey, PatternDef> = {
   },
   hex: {
     label: "Hex",
-    hint: "Subtle hexagon tessellation",
+    hint: "Hexagon outline grid",
     style: {
       backgroundImage: `url("data:image/svg+xml,${HEX_SVG}")`,
-      backgroundSize: "28px 49px",
+      backgroundSize: "42px 74px",
       backgroundRepeat: "repeat",
     },
   },
@@ -82,9 +99,7 @@ function readStored(): BgPatternKey {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
     if (v && v in BG_PATTERNS) return v as BgPatternKey;
-  } catch {
-    // ignore
-  }
+  } catch { /* ignore */ }
   return "none";
 }
 

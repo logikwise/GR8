@@ -1,13 +1,12 @@
 import { Link } from "@/lib/router";
 import { Settings, ArrowRight, Sliders, FlaskConical, Puzzle, Palette } from "lucide-react";
-import { PatternPicker } from "../components/PatternPicker";
 
 const SETTINGS_LINKS = [
   {
     to: "/grace/theme",
     icon: <Palette size={18} />,
     label: "Theme Manager",
-    description: "Choose an accent color palette for the interface",
+    description: "Accent colour, background pattern, and visual preferences",
   },
   {
     to: "/instance/settings/general",
@@ -45,46 +44,23 @@ export function GraceSettings() {
         </p>
       </div>
 
-      {/* ── Template config ─────────────────────────────────────────────── */}
-      <div className="mb-8">
-        <h2 className="text-xs font-medium tracking-widest uppercase text-muted-foreground/50 mb-4">
-          Template
-        </h2>
-        <div className="rounded-lg border border-border bg-card p-5 space-y-5">
-          {/* Background pattern */}
-          <div>
-            <div className="text-sm font-medium text-foreground mb-1">Background pattern</div>
-            <div className="text-xs text-muted-foreground mb-3">
-              Subtle repeating pattern applied behind the entire interface.
-            </div>
-            <PatternPicker showLabel={false} />
-          </div>
-        </div>
-      </div>
-
-      {/* ── System settings ─────────────────────────────────────────────── */}
-      <div>
-        <h2 className="text-xs font-medium tracking-widest uppercase text-muted-foreground/50 mb-4">
-          System
-        </h2>
-        <div className="space-y-2">
-          {SETTINGS_LINKS.map((link) => (
-            <Link
-              key={link.to}
-              to={link.to}
-              className="flex items-center justify-between rounded-lg border border-border bg-card p-4 hover:border-[var(--grace-accent)] hover:bg-[var(--grace-accent-muted)] transition-colors group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="text-[var(--grace-accent)]">{link.icon}</div>
-                <div>
-                  <div className="text-sm font-medium group-hover:text-[var(--grace-accent)]">{link.label}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{link.description}</div>
-                </div>
+      <div className="space-y-2">
+        {SETTINGS_LINKS.map((link) => (
+          <Link
+            key={link.to}
+            to={link.to}
+            className="flex items-center justify-between rounded-lg border border-border bg-card p-4 hover:border-[var(--grace-accent)] hover:bg-[var(--grace-accent-muted)] transition-colors group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="text-[var(--grace-accent)]">{link.icon}</div>
+              <div>
+                <div className="text-sm font-medium group-hover:text-[var(--grace-accent)]">{link.label}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{link.description}</div>
               </div>
-              <ArrowRight size={14} className="text-muted-foreground group-hover:text-[var(--grace-accent)]" />
-            </Link>
-          ))}
-        </div>
+            </div>
+            <ArrowRight size={14} className="text-muted-foreground group-hover:text-[var(--grace-accent)]" />
+          </Link>
+        ))}
       </div>
     </div>
   );
