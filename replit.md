@@ -47,18 +47,22 @@ GRACE is an AI agent orchestration and workflow platform. It provides a shell fo
 
 All GRACE routes are protected by `CloudAccessGate` (auth-required).
 
-| Route | Page |
-|---|---|
-| `/grace/home` | Home — quick links dashboard |
-| `/grace/workspace` | Workspace — links to agents/tasks/routines |
-| `/grace/library` | Workflow Library — Blueprint management |
-| `/grace/studio` | Studio — Instance build/observe panel |
-| `/grace/instances` | Instances — list and manage Instances |
-| `/grace/skills` | Skills — workspace skill management |
-| `/grace/tools` | Tools — tool registry |
-| `/grace/outputs` | Outputs — run output review |
-| `/grace/settings` | Settings — links to instance settings |
-| `/grace/admin` | Admin — user/role/audit management |
+| Route | Sidebar Label | Page |
+|---|---|---|
+| `/grace/home` | Home | Home — quick links dashboard |
+| `/grace/workspace` | Workspace | Workspace — links to agents/tasks/routines |
+| `/grace/library` | **Workflows** | Workflow Library — Blueprint management |
+| `/grace/studio` | Studio | Studio — multi-panel build/observe |
+| `/grace/studio/blueprint/:blueprintId` | — | Studio blueprint (read-only template mode) |
+| `/grace/studio/instance/:instanceId` | — | Studio instance (execution mode) |
+| `/grace/instances` | Instances | Instances — list and manage |
+| `/grace/skills` | Skills | Skills library — import/manage |
+| `/grace/tools` | Tools | Tools library — register/import |
+| `/grace/outputs` | **Library** | Library — run artifacts and outputs |
+| `/grace/settings` | Settings | Settings — links to instance settings |
+| `/grace/admin` | Admin | Admin — user/role/audit management |
+
+Note: sidebar labels "Workflows" and "Library" are the visible names; routes remain `/grace/library` and `/grace/outputs`.
 
 The root `/` redirects to `/grace/home`.
 
@@ -108,15 +112,47 @@ The app is configured for VM deployment:
 
 In production, the server serves the built UI files (`SERVE_UI=true`).
 
+## GRACE Component Map (Phase 3)
+
+```
+ui/src/grace/
+  GraceLayout.tsx              — shell layout (sidebar + outlet)
+  GraceSidebar.tsx             — navigation with Workflows/Library labels
+  blueprints/
+    blueprintTypes.ts          — Blueprint, BlueprintStep, etc.
+    blueprintService.ts        — in-memory store (TODO: swap to /api/blueprints)
+    sampleBlueprints.ts        — two sample blueprints
+  instances/
+    instanceTypes.ts           — Instance, InstanceStatus, etc.
+    instanceService.ts         — localStorage store (TODO: swap to /api/instances)
+  components/
+    BlueprintCard.tsx          — card + list-row variant; onManage prop (library only)
+    InstanceCard.tsx           — card variant for instances
+    BlueprintStepList.tsx      — simple step list
+    CreateInstanceModal.tsx    — 4-step wizard to create an Instance from a Blueprint
+    CreateWorkflowModal.tsx    — 4-step wizard to create a Blueprint skeleton
+    ManageBlueprintModal.tsx   — manage tabs: Overview/Edit/Export/Syntax Check
+    SearchFilterBar.tsx        — reusable search+filter+sort+view-toggle bar
+  pages/
+    Home.tsx                   — quick links
+    WorkflowLibrary.tsx        — Workflows page (search/filter/sort/manage/create)
+    Studio.tsx                 — multi-panel Studio (left/center/right/bottom)
+    Instances.tsx              — Instances page (search/filter/sort/card-list)
+    Skills.tsx                 — Skills library with import source placeholders
+    Tools.tsx                  — Tools library with import source placeholders
+    Outputs.tsx                — Library page (artifacts/outputs destination)
+    Workspace.tsx / Logs.tsx / Admin.tsx / Settings.tsx — other pages
+```
+
 ## Phase Status
 
 | Phase | Status | Summary |
 |---|---|---|
 | Phase 1 | Complete | GRACE shell, docs, auth wrap, theme tokens, placeholder pages, legacy nav hidden |
-| Phase 2 | Deferred | Studio wired to real Instance data |
-| Phase 3 | Deferred | Workflow Library wired to Blueprints/Routines |
-| Phase 4 | Deferred | Legacy pages deprecated and redirected |
-| Phase 5 | Deferred | Legacy pages removed |
+| Phase 2 | Complete | Blueprint/Instance flat-file services; Studio Phase 2; WorkflowLibrary wired |
+| Phase 3 | **Complete** | Studio multi-panel (left/center/right/bottom), Workflows renamed, Library renamed, search/filter/sort/view toggles, Manage blueprint, Create workflow skeleton, Skills/Tools library direction, refresh bug fix |
+| Phase 4 | Deferred | Backend API wiring for Blueprints/Instances, live execution, agent chat, real graph canvas |
+| Phase 5 | Deferred | Legacy pages deprecated and redirected |
 
 ## Notes
 

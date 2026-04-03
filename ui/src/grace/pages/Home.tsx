@@ -1,13 +1,13 @@
 import { Link } from "@/lib/router";
-import { Zap, Layers, BookOpen, Cpu, Wrench, FileOutput } from "lucide-react";
+import { Zap, Layers, BookOpen, Cpu, Wrench, FolderOpen } from "lucide-react";
 
 const QUICK_LINKS = [
-  { label: "Workflow Library", description: "Browse and manage blueprints", to: "/grace/library", icon: <BookOpen size={20} /> },
-  { label: "Instances", description: "View and manage running instances", to: "/grace/instances", icon: <Layers size={20} /> },
+  { label: "Workflows", description: "Browse and manage blueprint workflows", to: "/grace/library", icon: <BookOpen size={20} /> },
+  { label: "Instances", description: "View and manage workflow instances", to: "/grace/instances", icon: <Layers size={20} /> },
   { label: "Studio", description: "Build and observe agent workflows", to: "/grace/studio", icon: <Cpu size={20} /> },
-  { label: "Skills", description: "Manage agent skills", to: "/grace/skills", icon: <Zap size={20} /> },
-  { label: "Tools", description: "Configure available tools", to: "/grace/tools", icon: <Wrench size={20} /> },
-  { label: "Outputs", description: "Review agent outputs", to: "/grace/outputs", icon: <FileOutput size={20} /> },
+  { label: "Skills", description: "Manage agent skills and capabilities", to: "/grace/skills", icon: <Zap size={20} /> },
+  { label: "Tools", description: "Configure tools available to agents", to: "/grace/tools", icon: <Wrench size={20} /> },
+  { label: "Library", description: "Review artifacts and outputs from runs", to: "/grace/outputs", icon: <FolderOpen size={20} /> },
 ];
 
 export function GraceHome() {
@@ -16,7 +16,7 @@ export function GraceHome() {
       <div className="mb-8">
         <h1 className="text-2xl font-semibold tracking-tight">Welcome to GRACE</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          GRACE — your agent orchestration and workflow platform.
+          G.R.A.C.E. — Generative Runtime Agent Coordination Engine by Kodavara.
         </p>
       </div>
 

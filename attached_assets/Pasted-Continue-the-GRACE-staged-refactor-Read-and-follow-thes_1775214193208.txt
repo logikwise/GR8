@@ -1,0 +1,336 @@
+Continue the GRACE staged refactor. Read and follow these files first:
+
+* docs/product-model.md
+* docs/architecture-plan.md
+* docs/studio-spec.md
+* docs/replit-guardrails.md
+
+This is Phase 3.
+
+Do NOT remove backend/runtime/adapter/platform connection code.
+Do NOT overfit the UI to the current full left-nav layout.
+Do NOT add fake runtime behavior that conflicts with future real execution/provider integration.
+
+This phase should expand the Studio and library surfaces substantially while preserving the existing product model and future Mission Control reuse.
+
+## Phase 3 goals
+
+1. Build the real Studio shell structure:
+
+   * left details/config surface
+   * center graph/flow surface
+   * right chat surface
+   * bottom console surface
+2. Improve Studio instance mode and blueprint/template mode
+3. Add a neutral but alive Studio landing state
+4. Rename Workflow Library to Workflows
+5. Rename Outputs to Library (raw files/artifacts-oriented destination)
+6. Restrict blueprint management actions to the Workflows/library context only
+7. Add metadata surfaces for blueprints, instances, skills, and tools
+8. Add search/filter/sort/list-table-toggle patterns where relevant
+9. Fix direct refresh behavior on Studio blueprint and instance routes
+10. Keep code modular so later Mission Control, provider support, routines, skills/tools import systems, and chained workflows can be layered in
+
+## Critical product rules
+
+* Blueprint is a reusable workflow template and cannot run directly
+* Only Instances can run later
+* Studio blueprint mode is read-only/template mode
+* Blueprint management happens in the Workflows/library context, not in Studio preview
+* Instance mode is the future execution context
+* Studio graph in instance mode is instance-contained only:
+
+  * assigned agent(s)
+  * steps
+  * skills
+  * tools
+  * outputs
+* Full workspace swarm is separate and outside Studio
+* Preserve future runtime/provider-agnostic direction: OpenClaw first, but Hermes/Claude/Codex/etc later
+* Preserve repurposable concepts for future Mission Control/team/workspace layer
+
+## Important architectural rules
+
+* Favor reusable modules/panels/services over page-locked logic
+* Build surfaces so they can later move into drawers, overlays, top bars, bottom consoles, or wider canvas layouts
+* Preserve compatibility with future provider abstraction and runtime translation layers
+* Do not remove concepts that may later support:
+
+  * Mission Control
+  * workspace visibility
+  * analytics
+  * traces/costs/logs
+  * grouped/chained workflows
+  * routines/triggers
+  * admin operations
+
+## Implementation requirements
+
+### A. Rename surfaces
+
+Update visible product labels:
+
+* "Workflow Library" -> "Workflows"
+* "Outputs" -> "Library"
+
+Notes:
+
+* The Workflows area is the blueprint/template library
+* The Library area is for raw files/artifacts/outputs and should be structured for future file browsing
+* Preserve underlying route/code structure if needed, but update visible UX labels now
+* If route renames are low-risk, align them cleanly; if not, keep stable routes and update labels first
+
+### B. Studio shell upgrade
+
+Upgrade Studio into a more realistic multi-surface layout.
+
+Studio should include:
+
+1. Left surface:
+
+* instance/blueprint details
+* configuration summary
+* agent assignments
+* metadata summary
+* step/skill/tool summary depending on context
+
+2. Center surface:
+
+* toggle between Graph view and Flow view
+* Graph view: richer placeholder graph/canvas surface for future node-based visualization
+* Flow view: ordered step view with:
+
+  * step number
+  * name
+  * icon
+  * description
+  * skills
+  * tools
+  * output markers if present
+
+3. Right surface:
+
+* chat panel shell
+* should be present in instance mode
+* blueprint mode can show contextual guidance but no active execution
+* do not fully wire runtime yet
+
+4. Bottom console:
+   Add and organize tabs for:
+
+* Logs
+* Steps
+* Skills
+* Tools
+* Outputs
+* Meta
+* Trace
+
+The console should be structured so future runtime data can plug in cleanly.
+
+### C. Studio landing state
+
+Improve Studio landing (neutral state) so it feels alive but not cluttered.
+
+Requirements:
+
+* neutral empty/landing state when no blueprint or instance is open
+* subtle atmospheric activity:
+
+  * ambient automations
+  * faint motion
+  * subtle background status pings or ephemeral cards
+* should feel like the system is alive, but remain understated
+* do not confuse this with the workspace swarm or instance graph
+
+### D. Blueprint management rules
+
+In the Workflows/library context, an admin or authorized user should be able to access a Manage action for a blueprint.
+
+Replace/Edit behavior with Manage behavior.
+
+Manage should support:
+
+* duplicate blueprint
+* export to package
+* run syntax check
+* edit and save blueprint
+
+Rules:
+
+* Manage is available from the Workflows/library/admin context
+* Manage is NOT available when previewing the blueprint in Studio
+* Studio blueprint mode remains preview/template mode only
+
+Versioning can be deferred, but structure the manage surface so versioning can be added later.
+
+### E. Workflow skeleton creation
+
+Support "Create New" in Workflows by generating a workflow skeleton file/object.
+
+Implement a reusable skeleton structure that clearly supports:
+
+* metadata
+* dynamic questions
+* agent placeholders/requirements
+* steps
+* skills per step
+* tools per step
+* prompts per step
+* optional outputs
+
+This does not need full advanced editing yet, but users should be able to create a new workflow skeleton that demonstrates the target structure.
+
+Favor a schema-first design that can later support both form editing and file/package import/export.
+
+### F. Metadata
+
+Add metadata support and display patterns for:
+
+* blueprints/workflows
+* instances
+* skills
+* tools
+
+Metadata should be designed to support fields like:
+
+* author
+* created date
+* updated date
+* source
+* tags
+* category
+* location/path
+* provider/platform
+* status
+* notes/description
+
+You do not need full backend wiring for all metadata yet, but establish the structure and surface it in cards/details panels where appropriate.
+
+### G. Search, filters, sort, and view toggles
+
+Add reusable search/list controls where relevant.
+
+For Instances:
+
+* search
+* filtering by:
+
+  * category
+  * tools
+  * skills
+  * agents
+* sort control
+* card vs list/table toggle
+
+For Workflows:
+
+* search
+* filtering by:
+
+  * category
+  * tools
+  * skills
+  * agent types
+* sort control
+* card vs list/table toggle
+
+Build these as reusable controls/components so they can be reused in skills/tools/library surfaces later.
+
+### H. Skills and tools library direction
+
+Do not fully implement all import sources yet, but shape the libraries now for that future.
+
+Skills library should be structured to support future sources:
+
+* connected workspaces
+* create new
+* upload/import file/package
+* import from git source
+* import from site
+* import from URL
+* import from skills.sh
+
+Tools should be structured similarly.
+Plugins later should follow a similar pattern.
+
+In this phase:
+
+* establish metadata/types/UI placeholders/entry points for those import paths
+* do not fake fully working backend integrations if they are not ready
+* do not block future provider-agnostic support
+
+### I. Route refresh bug
+
+Fix the issue where refreshing an instance Studio view hangs briefly and redirects back to the main page.
+
+Requirements:
+
+* direct refresh on Studio blueprint route should remain on the blueprint
+* direct refresh on Studio instance route should remain on the instance
+* preserve auth and route guards correctly
+* do not fall back to legacy default routes if the new GRACE route is valid
+
+### J. Agent linking limitation
+
+We cannot fully link to real agents yet.
+That is okay.
+
+For this phase:
+
+* keep agent assignment and display structures intact
+* improve presentation where useful
+* avoid pretending full agent discovery is finished
+* preserve the future GET /api/agents integration point
+
+### K. Visual structure guidance
+
+Build toward a wider canvas-first future.
+
+Even if the current shell still uses a left nav:
+
+* avoid locking the design into narrow page-only layouts
+* keep center Studio canvas as the dominant surface
+* keep bottom console modular
+* keep left/right surfaces modular and relocatable
+* structure reusable components so they can later become drawers/inspectors
+
+### L. Preserve future provider-agnostic runtime direction
+
+Design this phase so the platform remains runtime-agnostic at the workflow/instance layer.
+
+OpenClaw is first, but later providers may include:
+
+* Hermes
+* Claude
+* Codex
+* others
+
+Do not bake provider-specific assumptions into the blueprint/instance product model.
+
+## Deliverables
+
+1. Studio shell upgraded with left/center/right/bottom structure
+2. Graph and Flow toggle improved in Studio
+3. Bottom console includes Logs, Steps, Skills, Tools, Outputs, Meta, Trace
+4. Studio landing feels alive but neutral
+5. Workflow Library is visibly renamed to Workflows
+6. Outputs is visibly renamed to Library
+7. Manage blueprint behavior exists in Workflows context only
+8. Create New workflow skeleton exists and reflects the workflow schema direction
+9. Metadata surfaces added
+10. Search/filter/sort/list-table toggles added for Workflows and Instances
+11. Studio refresh bug fixed for blueprint and instance routes
+12. App still boots and prior phase behavior remains intact
+
+## At the end
+
+Provide:
+
+1. summary of files created/changed
+2. explanation of how Studio modes now differ
+3. explanation of how workflow skeletons are structured
+4. explanation of metadata/search/filter/view-toggle implementation
+5. note how the route refresh issue was fixed
+6. list deferred items for Phase 4
+7. identify which parts were intentionally kept modular for later Mission Control and multi-provider support

@@ -1,8 +1,26 @@
-import { useState } from "react";
-import { BookOpen, Plus, Upload, Search, X } from "lucide-react";
+/**
+ * WorkflowLibrary — Phase 3 (visibly renamed to "Workflows")
+ *
+ * Surfaces:
+ * - Blueprint list with search / filter / sort / card-list toggle
+ * - "Manage" action per blueprint (opens ManageBlueprintModal)
+ * - "Create Workflow" (opens CreateWorkflowModal wizard)
+ * - "Import Blueprint" (file / paste / URL)
+ *
+ * Blueprint management (Manage, Duplicate, Export, Syntax Check) lives here only.
+ * Studio blueprint mode is preview/template mode — no management actions there.
+ *
+ * TODO (Phase 4): Replace blueprintService with GET/POST /api/blueprints.
+ */
+
+import { useState, useMemo, useRef } from "react";
+import { BookOpen, Plus, Upload, FileJson, Link as LinkIcon, AlertCircle } from "lucide-react";
 import { useNavigate } from "@/lib/router";
 import { blueprintService } from "../blueprints/blueprintService";
 import { BlueprintCard } from "../components/BlueprintCard";
+import { ManageBlueprintModal } from "../components/ManageBlueprintModal";
+import { CreateWorkflowModal } from "../components/CreateWorkflowModal";
+import { SearchFilterBar, type FilterDef, type SortOption } from "../components/SearchFilterBar";
 import type { Blueprint } from "../blueprints/blueprintTypes";
 import {
   Dialog,
@@ -15,11 +33,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { FileJson, Link, AlertCircle } from "lucide-react";
 import type { DragEvent, ChangeEvent } from "react";
-import { useRef } from "react";
 
 type ImportTab = "file" | "paste" | "url";
+
+// ─── Import Modal ──────────────────────────────────────────────────────────────
 
 function ImportBlueprintModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [tab, setTab] = useState<ImportTab>("file");
@@ -31,14 +49,9 @@ function ImportBlueprintModal({ open, onClose }: { open: boolean; onClose: () =>
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function reset() {
-    setTab("file");
-    setDragging(false);
-    setDroppedFile(null);
-    setPasteContent("");
-    setUrlValue("");
-    setError(null);
+    setTab("file"); setDragging(false); setDroppedFile(null);
+    setPasteContent(""); setUrlValue(""); setError(null);
   }
-
   function handleClose() { reset(); onClose(); }
 
   function handleDragOver(e: DragEvent) { e.preventDefault(); setDragging(true); }
@@ -66,7 +79,7 @@ function ImportBlueprintModal({ open, onClose }: { open: boolean; onClose: () =>
   const TABS: { id: ImportTab; label: string; icon: React.ReactNode }[] = [
     { id: "file", label: "File", icon: <FileJson size={14} /> },
     { id: "paste", label: "Paste JSON / YAML", icon: <Upload size={14} /> },
-    { id: "url", label: "URL", icon: <Link size={14} /> },
+    { id: "url", label: "URL", icon: <LinkIcon size={14} /> },
   ];
 
   return (
@@ -90,8 +103,7 @@ function ImportBlueprintModal({ open, onClose }: { open: boolean; onClose: () =>
             <div onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
               className={cn("flex cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-8 text-center transition-colors select-none",
-                dragging ? "border-[var(--grace-accent)] bg-[var(--grace-accent-muted)]" :
-                droppedFile ? "border-[var(--grace-accent)] bg-[var(--grace-accent-muted)]" :
+                dragging || droppedFile ? "border-[var(--grace-accent)] bg-[var(--grace-accent-muted)]" :
                 "border-border bg-muted/20 hover:border-[var(--grace-accent)]/50 hover:bg-muted/40")}>
               <input ref={fileInputRef} type="file" accept=".json,.yaml,.yml" className="hidden" onChange={handleFileChange} />
               {droppedFile ? (
@@ -127,7 +139,7 @@ function ImportBlueprintModal({ open, onClose }: { open: boolean; onClose: () =>
           <Button variant="outline" size="sm" onClick={handleClose}>Cancel</Button>
           <Button size="sm" disabled={!canImport}
             style={{ background: canImport ? "var(--grace-accent)" : undefined, color: canImport ? "var(--grace-accent-foreground)" : undefined }}
-            onClick={() => setError("Blueprint import is coming soon — this feature is not yet wired to the backend.")}>
+            onClick={() => setError("Blueprint import is not yet wired — paste/file parsing coming in Phase 4.")}>
             Import Blueprint
           </Button>
         </div>
@@ -136,66 +148,137 @@ function ImportBlueprintModal({ open, onClose }: { open: boolean; onClose: () =>
   );
 }
 
+// ─── Filters / Sort config ─────────────────────────────────────────────────────
+
+const SORT_OPTIONS: SortOption[] = [
+  { value: "name-asc", label: "Name A–Z" },
+  { value: "name-desc", label: "Name Z–A" },
+  { value: "steps-desc", label: "Most Steps" },
+  { value: "updated-desc", label: "Recently Updated" },
+  { value: "created-desc", label: "Newest First" },
+];
+
+function buildFilterDefs(blueprints: Blueprint[]): FilterDef[] {
+  const categories = [...new Set(blueprints.map((b) => b.ui?.category).filter(Boolean) as string[])];
+  const types = [...new Set(blueprints.map((b) => b.workflowType))];
+  const defs: FilterDef[] = [];
+  if (categories.length > 0) defs.push({ key: "category", label: "Category", options: categories });
+  if (types.length > 0) defs.push({ key: "type", label: "Type", options: types });
+  return defs;
+}
+
+function sortBlueprints(list: Blueprint[], sort: string): Blueprint[] {
+  return [...list].sort((a, b) => {
+    if (sort === "name-asc") return a.name.localeCompare(b.name);
+    if (sort === "name-desc") return b.name.localeCompare(a.name);
+    if (sort === "steps-desc") return b.steps.length - a.steps.length;
+    if (sort === "updated-desc") return (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "");
+    if (sort === "created-desc") return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
+    return 0;
+  });
+}
+
+// ─── Page ──────────────────────────────────────────────────────────────────────
+
 export function GraceWorkflowLibrary() {
   const navigate = useNavigate();
+  const [refreshKey, setRefreshKey] = useState(0);
   const [importOpen, setImportOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [managingBlueprint, setManagingBlueprint] = useState<Blueprint | null>(null);
+
   const [search, setSearch] = useState("");
+  const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
+  const [activeSort, setActiveSort] = useState("name-asc");
+  const [viewMode, setViewMode] = useState<"card" | "list">("card");
 
-  const allBlueprints = blueprintService.getAll();
-  const filtered = allBlueprints.filter((bp) => {
+  const allBlueprints = useMemo(() => blueprintService.getAll(), [refreshKey]);
+
+  const filterDefs = useMemo(() => buildFilterDefs(allBlueprints), [allBlueprints]);
+
+  const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return !q || bp.name.toLowerCase().includes(q) || bp.description.toLowerCase().includes(q) || bp.ui?.tags?.some((t) => t.includes(q));
-  });
+    const list = allBlueprints.filter((bp) => {
+      if (q && !bp.name.toLowerCase().includes(q) && !bp.description.toLowerCase().includes(q) &&
+          !(bp.ui?.tags ?? []).some((t) => t.toLowerCase().includes(q))) return false;
+      if (activeFilters.category && bp.ui?.category !== activeFilters.category) return false;
+      if (activeFilters.type && bp.workflowType !== activeFilters.type) return false;
+      return true;
+    });
+    return sortBlueprints(list, activeSort);
+  }, [allBlueprints, search, activeFilters, activeSort]);
 
-  function handleOpen(bp: Blueprint) {
-    navigate(`/grace/studio/blueprint/${bp.id}`);
+  function handleOpen(bp: Blueprint) { navigate(`/grace/studio/blueprint/${bp.id}`); }
+
+  function handleManage(bp: Blueprint) { setManagingBlueprint(bp); }
+
+  function handleFilterChange(key: string, value: string) {
+    setActiveFilters((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function handleUpdated() {
+    setManagingBlueprint(null);
+    setRefreshKey((k) => k + 1);
+  }
+
+  function handleCreated() {
+    setCreateOpen(false);
+    setRefreshKey((k) => k + 1);
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-10">
+    <div className="mx-auto max-w-5xl px-6 py-10">
+      {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Workflow Library</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Workflows</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Browse and manage Blueprints. Blueprints are templates — create an Instance to execute.
+            Browse and manage Blueprint workflows. Blueprints are templates — create an Instance to execute.
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => setImportOpen(true)}
             className="flex items-center gap-1.5 rounded border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-[var(--grace-accent)] hover:text-[var(--grace-accent)] hover:bg-[var(--grace-accent-muted)]">
-            <Upload size={14} />Import Blueprint
+            <Upload size={14} />Import
           </button>
-          <button type="button"
+          <button type="button" onClick={() => setCreateOpen(true)}
             className="flex items-center gap-1.5 rounded border border-[var(--grace-accent)] px-3 py-1.5 text-xs font-medium text-[var(--grace-accent)] transition-colors hover:bg-[var(--grace-accent-muted)]">
-            <Plus size={14} />New Blueprint
+            <Plus size={14} />Create Workflow
           </button>
         </div>
       </div>
 
+      {/* Search + filter bar */}
       {allBlueprints.length > 0 && (
-        <div className="mb-4 relative">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search blueprints…"
-            className="w-full rounded-md border border-border bg-card pl-8 pr-8 py-1.5 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-[var(--grace-accent)]"
+        <div className="mb-4">
+          <SearchFilterBar
+            search={search}
+            onSearchChange={setSearch}
+            placeholder="Search workflows…"
+            filters={filterDefs}
+            activeFilters={activeFilters}
+            onFilterChange={handleFilterChange}
+            sortOptions={SORT_OPTIONS}
+            activeSort={activeSort}
+            onSortChange={setActiveSort}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            resultCount={filtered.length}
           />
-          {search && (
-            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 hover:text-foreground">
-              <X size={12} />
-            </button>
-          )}
         </div>
       )}
 
+      {/* Empty state */}
       {filtered.length === 0 && allBlueprints.length === 0 && (
         <div className="rounded-lg border border-dashed border-border bg-card/50 p-12 text-center">
           <BookOpen size={32} className="mx-auto mb-3 text-muted-foreground/40" />
-          <p className="text-sm font-medium text-muted-foreground">No blueprints yet</p>
-          <p className="mt-1 text-xs text-muted-foreground/70">Create or import a Blueprint to get started.</p>
+          <p className="text-sm font-medium text-muted-foreground">No workflows yet</p>
+          <p className="mt-1 text-xs text-muted-foreground/70">Create a new workflow or import a Blueprint to get started.</p>
           <div className="mt-4 flex items-center justify-center gap-2">
+            <button type="button" onClick={() => setCreateOpen(true)}
+              className="flex items-center gap-1.5 rounded border border-[var(--grace-accent)] px-3 py-1.5 text-xs font-medium text-[var(--grace-accent)] transition-colors hover:bg-[var(--grace-accent-muted)]">
+              <Plus size={14} />Create Workflow
+            </button>
             <button type="button" onClick={() => setImportOpen(true)}
               className="flex items-center gap-1.5 rounded border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-[var(--grace-accent)] hover:text-[var(--grace-accent)] hover:bg-[var(--grace-accent-muted)]">
               <Upload size={14} />Import Blueprint
@@ -204,21 +287,49 @@ export function GraceWorkflowLibrary() {
         </div>
       )}
 
+      {/* No search match */}
       {filtered.length === 0 && allBlueprints.length > 0 && (
         <div className="rounded-lg border border-dashed border-border bg-card/50 p-8 text-center">
-          <p className="text-sm text-muted-foreground">No blueprints match "{search}"</p>
+          <p className="text-sm text-muted-foreground">No workflows match your current search or filters.</p>
+          <button type="button" onClick={() => { setSearch(""); setActiveFilters({}); }}
+            className="mt-2 text-xs text-[var(--grace-accent)] hover:underline">Clear filters</button>
         </div>
       )}
 
+      {/* Blueprint list */}
       {filtered.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className={cn(
+          viewMode === "card" ? "grid gap-3 sm:grid-cols-2" : "space-y-1.5"
+        )}>
           {filtered.map((bp) => (
-            <BlueprintCard key={bp.id} blueprint={bp} onOpen={handleOpen} />
+            <BlueprintCard
+              key={bp.id}
+              blueprint={bp}
+              onOpen={handleOpen}
+              onManage={handleManage}
+              viewMode={viewMode}
+            />
           ))}
         </div>
       )}
 
+      {/* Modals */}
       <ImportBlueprintModal open={importOpen} onClose={() => setImportOpen(false)} />
+
+      <CreateWorkflowModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={handleCreated}
+      />
+
+      {managingBlueprint && (
+        <ManageBlueprintModal
+          blueprint={managingBlueprint}
+          open={!!managingBlueprint}
+          onClose={() => setManagingBlueprint(null)}
+          onUpdated={handleUpdated}
+        />
+      )}
     </div>
   );
 }
