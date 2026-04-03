@@ -1,0 +1,168 @@
+Refactor this existing codebase into a new product shell called GRACE, while preserving the backend runtime/orchestration core and existing platform connection plumbing.
+
+This is a staged refactor. Do NOT try to build the full Studio runtime yet. Do NOT delete backend/runtime packages unless they are clearly unused and isolated. Do NOT break startup.
+
+First, inspect the repo and identify:
+
+* top-level packages/apps
+* current route structure
+* current auth structure if any
+* current shared UI/layout system
+* backend/runtime/server packages
+* connection/adapter/plugin packages
+* where branding/navigation currently lives
+
+Then implement only Phase 1 foundation work.
+
+## Phase 1 goals
+
+1. Preserve the current backend/runtime/orchestration and connection code
+2. Build a new GRACE app shell on top of the current project
+3. Add real authentication scaffolding and protected routes
+4. Add a theme/template system for future visual control
+5. Hide legacy UI from main navigation without deleting it yet
+6. Add repo documentation so later prompts have persistent context
+
+## Critical product rules
+
+* Blueprints are templates and cannot be executed directly
+* Only Instances can run
+* Studio will later operate on Instances, not raw Blueprints
+* In Studio, the graph will only show the assigned agent(s), steps, skills, tools, and outputs for the active instance
+* Workspace swarm is a separate later feature outside Studio
+* Preserve platform hooks and current connection/runtime plumbing
+* Prefer additive refactors before destructive deletion
+
+## Create or update these docs
+
+If they do not exist, create them.
+
+### docs/product-model.md
+
+Include:
+
+* Blueprint definition
+* Instance definition
+* Run definition
+* Workflow Library behavior
+* rule that Blueprint cannot run
+* rule that Instance is a detached executable snapshot
+* graph mode vs flow mode distinction
+* workspace swarm vs studio graph distinction
+
+### docs/architecture-plan.md
+
+Include:
+
+* package preservation strategy
+* new app shell strategy
+* auth strategy
+* theme/template strategy
+* translation layer concept
+* staged legacy retirement plan
+
+### docs/studio-spec.md
+
+Include:
+
+* future Studio layout
+* left panel / center graph-flow / right chat / bottom console
+* no blueprint run behavior
+* create instance flow
+* editable steps/skills/tools when not running
+
+### docs/replit-guardrails.md
+
+Include:
+
+* do not delete runtime core
+* do not delete adapter/connection plumbing
+* do not break startup path
+* do not allow blueprint execution
+* build new shell alongside old system first
+* defer uncertain removals
+
+## App shell
+
+Build a new authenticated shell with:
+
+* left navigation
+* top header
+* content container
+* route structure for:
+
+  * Home
+  * Workspace
+  * Workflow Library
+  * Studio
+  * Instances
+  * Skills
+  * Tools
+  * Outputs
+  * Settings
+  * Admin
+
+These routes can use placeholders for now, but they must exist and render consistently inside the new shell.
+
+## Authentication
+
+Implement a real auth foundation:
+
+* login page
+* logout action
+* session persistence
+* protected routes
+* user context
+* workspace context
+* role-ready structure for:
+
+  * admin
+  * builder
+  * operator
+  * viewer
+
+If the existing project already has auth, wrap or modernize it rather than breaking working behavior. If it does not, create a clean scaffold that can later be wired to the preferred auth provider.
+
+## Theme/template system
+
+Implement a design system foundation:
+
+* theme provider
+* dark mode default
+* optional light mode support
+* tokenized colors
+* spacing
+* radii
+* shadows
+* typography
+* panel/card/button/input variants
+* hooks for future graph node styling
+
+This should be structured so the app look and feel can be adjusted centrally later without rewriting pages.
+
+## Legacy containment
+
+* Hide legacy pages from primary nav
+* Preserve them behind feature flags or internal routes where practical
+* Do not mass-delete old code yet
+* Rename visible shell branding to GRACE where appropriate
+* Remove obvious old branding from the main experience if low risk
+
+## Guardrails
+
+* Do not remove server/runtime packages unless clearly unused and isolated
+* Do not remove connection/platform adapter code
+* Do not break current startup scripts unless replacing with a working equivalent
+* Do not implement Studio runtime execution yet
+* Do not implement blueprint running
+* Do not build mock backend logic that conflicts with real backend logic
+
+## Output required
+
+At the end:
+
+1. summarize repo structure discovered
+2. list files created/changed
+3. list preserved runtime/core areas not touched
+4. list deferred items for the next phase
+5. note any assumptions made because of unclear code structure

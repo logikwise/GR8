@@ -45,6 +45,21 @@
 :root {
   color-scheme: light;
   --radius: 0;
+  /* GRACE design tokens */
+  --grace-accent: #7c3aed;
+  --grace-accent-muted: #ede9fe;
+  --grace-accent-foreground: #ffffff;
+  --grace-radius: 6px;
+  --grace-spacing-1: 4px;
+  --grace-spacing-2: 8px;
+  --grace-spacing-3: 12px;
+  --grace-spacing-4: 16px;
+  --grace-spacing-6: 24px;
+  --grace-spacing-8: 32px;
+  --grace-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --grace-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --grace-font-sans: inherit;
+  --grace-font-mono: ui-monospace, monospace;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -80,6 +95,10 @@
 }
 
 .dark {
+  /* GRACE dark mode tokens */
+  --grace-accent: #a78bfa;
+  --grace-accent-muted: #1e1535;
+  --grace-accent-foreground: #ffffff;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);

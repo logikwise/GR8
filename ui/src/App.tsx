@@ -48,6 +48,17 @@ import { useCompany } from "./context/CompanyContext";
 import { useDialog } from "./context/DialogContext";
 import { loadLastInboxTab } from "./lib/inbox";
 import { shouldRedirectCompanylessRouteToOnboarding } from "./lib/onboarding-route";
+import { GraceLayout } from "./grace/GraceLayout";
+import { GraceHome } from "./grace/pages/Home";
+import { GraceWorkspace } from "./grace/pages/Workspace";
+import { GraceWorkflowLibrary } from "./grace/pages/WorkflowLibrary";
+import { GraceStudio } from "./grace/pages/Studio";
+import { GraceInstances } from "./grace/pages/Instances";
+import { GraceSkills } from "./grace/pages/Skills";
+import { GraceTools } from "./grace/pages/Tools";
+import { GraceOutputs } from "./grace/pages/Outputs";
+import { GraceSettings } from "./grace/pages/GraceSettings";
+import { GraceAdmin } from "./grace/pages/Admin";
 
 function BootstrapPendingPage({ hasActiveInvite = false }: { hasActiveInvite?: boolean }) {
   return (
@@ -311,7 +322,20 @@ export function App() {
         <Route path="invite/:token" element={<InviteLandingPage />} />
 
         <Route element={<CloudAccessGate />}>
-          <Route index element={<CompanyRootRedirect />} />
+          <Route index element={<Navigate to="/grace/home" replace />} />
+          <Route path="grace" element={<GraceLayout />}>
+            <Route index element={<Navigate to="home" replace />} />
+            <Route path="home" element={<GraceHome />} />
+            <Route path="workspace" element={<GraceWorkspace />} />
+            <Route path="library" element={<GraceWorkflowLibrary />} />
+            <Route path="studio" element={<GraceStudio />} />
+            <Route path="instances" element={<GraceInstances />} />
+            <Route path="skills" element={<GraceSkills />} />
+            <Route path="tools" element={<GraceTools />} />
+            <Route path="outputs" element={<GraceOutputs />} />
+            <Route path="settings" element={<GraceSettings />} />
+            <Route path="admin" element={<GraceAdmin />} />
+          </Route>
           <Route path="onboarding" element={<OnboardingRoutePage />} />
           <Route path="instance" element={<Navigate to="/instance/settings/general" replace />} />
           <Route path="instance/settings" element={<Layout />}>
