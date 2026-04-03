@@ -302,7 +302,7 @@ function StudioHeader({
       {/* Center tab switcher */}
       {mode !== "landing" && (
         <div className="flex items-center mx-auto border border-border rounded overflow-hidden text-xs">
-          {(["graph", "flow", "runtime"] as CenterTab[]).map((tab, i) => (
+          {(mode === "blueprint" ? (["graph", "flow"] as CenterTab[]) : (["graph", "flow", "runtime"] as CenterTab[])).map((tab, i) => (
             <button key={tab} type="button" onClick={() => onCenterTab(tab)}
               className={cn(
                 "px-3 py-1 capitalize transition-colors",
@@ -894,7 +894,7 @@ function BottomPanel({
   mode: StudioMode; blueprint?: Blueprint | null; instance?: Instance | null;
   runRecord: RunRecord | null;
 }) {
-  const [activeTab, setActiveTab] = useState<BottomTab>("logs");
+  const [activeTab, setActiveTab] = useState<BottomTab>("steps");
   const [open, setOpen] = useState(true);
 
   const bpSteps = blueprint?.steps ?? [];
@@ -909,15 +909,24 @@ function BottomPanel({
     : [];
   const outputs = mode === "blueprint" ? (blueprint?.outputs ?? []) : [];
 
-  const TABS: { id: BottomTab; label: string; icon: React.ReactNode }[] = [
-    { id: "logs",    label: "Logs",    icon: <Terminal   size={11} /> },
+  const ALL_TABS: { id: BottomTab; label: string; icon: React.ReactNode; instanceOnly?: boolean }[] = [
+    { id: "logs",    label: "Logs",    icon: <Terminal   size={11} />, instanceOnly: true  },
     { id: "steps",   label: "Steps",   icon: <ListChecks size={11} /> },
     { id: "skills",  label: "Skills",  icon: <Zap        size={11} /> },
     { id: "tools",   label: "Tools",   icon: <Wrench     size={11} /> },
-    { id: "outputs", label: "Outputs", icon: <FileText   size={11} /> },
+    { id: "outputs", label: "Outputs", icon: <FileText   size={11} />, instanceOnly: true  },
     { id: "meta",    label: "Meta",    icon: <Info       size={11} /> },
-    { id: "trace",   label: "Trace",   icon: <BarChart3  size={11} /> },
+    { id: "trace",   label: "Trace",   icon: <BarChart3  size={11} />, instanceOnly: true  },
   ];
+
+  const TABS = ALL_TABS.filter((t) => !(mode === "blueprint" && t.instanceOnly));
+
+  // Reset active tab if it's no longer visible
+  useEffect(() => {
+    if (!TABS.find((t) => t.id === activeTab)) {
+      setActiveTab(TABS[0]?.id ?? "steps");
+    }
+  }, [mode]);
 
   const runEvents = runRecord?.events ?? [];
   const runSteps = runRecord?.steps ?? [];
@@ -1170,12 +1179,19 @@ export function GraceStudio() {
     if (tab === "runtime") setSelectedStep(null);
   }
 
-  // Auto-switch to Runtime tab when run is active
+  // Auto-switch to Runtime tab when run is active (instance mode only)
   useEffect(() => {
     if (runRecord?.status === "running" && centerTab === "flow") {
       setCenterTab("runtime");
     }
   }, [runRecord?.status]);
+
+  // Blueprint mode never shows Runtime — reset if somehow selected
+  useEffect(() => {
+    if (mode === "blueprint" && centerTab === "runtime") {
+      setCenterTab("flow");
+    }
+  }, [mode, centerTab]);
 
   // Drag-to-resize chat panel
   const handleStartChatResize = useCallback((e: React.MouseEvent) => {
