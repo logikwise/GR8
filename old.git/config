@@ -1,0 +1,18 @@
+[core]
+	repositoryformatversion = 0
+	filemode = true
+	bare = false
+	logallrefupdates = true
+[lfs "http://gitsafe:5419"]
+	locksverify = false
+[remote "origin"]
+	url = https://github.com/logikwise/GR8
+	fetch = +refs/heads/*:refs/remotes/origin/*
+[remote "gitsafe-backup"]
+	url = git://gitsafe:5418/backup.git
+	fetch = +refs/heads/*:refs/remotes/gitsafe-backup/*
+	lfsurl = http://gitsafe:5419
+[pack]
+	windowMemory = 10m
+	packSizeLimit = 20m
+	threads = 1
