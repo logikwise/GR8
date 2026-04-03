@@ -2,13 +2,12 @@
  * GraceSidebar
  *
  * Supports expanded (w-56) and collapsed (w-12 icon-only) modes.
- * Auto-collapses when first entering any /grace/studio* route.
- * User toggle is respected — won't re-collapse mid-session within Studio.
+ * Starts expanded; user can toggle collapse at any time.
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { NavLink } from "react-router-dom";
-import { useNavigate, useLocation } from "@/lib/router";
+import { useNavigate } from "@/lib/router";
 import {
   Home,
   LayoutDashboard,
@@ -114,22 +113,8 @@ export function GraceSidebar() {
   const { theme, toggleTheme } = useTheme();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const location = useLocation();
 
-  // Default collapsed if starting on a Studio route
-  const [collapsed, setCollapsed] = useState(() =>
-    location.pathname.startsWith("/grace/studio")
-  );
-
-  // Auto-collapse when first entering Studio; don't re-collapse while navigating within it
-  const wasInStudio = useRef(location.pathname.startsWith("/grace/studio"));
-  useEffect(() => {
-    const inStudio = location.pathname.startsWith("/grace/studio");
-    if (inStudio && !wasInStudio.current) {
-      setCollapsed(true);
-    }
-    wasInStudio.current = inStudio;
-  }, [location.pathname]);
+  const [collapsed, setCollapsed] = useState(false);
 
   const { data: health } = useQuery({
     queryKey: queryKeys.health,
