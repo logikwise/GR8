@@ -1,5 +1,5 @@
 /**
- * Studio — Phase 5
+ * Studio — Phase 8
  *
  * Layout:
  *   ┌────────────────────────────────────────────────────────────────┐
@@ -9,17 +9,15 @@
  *   │  (toggleable) │   Graph ← or → Flow ← or → Rt   │  panel      │
  *   │  ~210px       │   + StepInspector drawer (right) │  resizable  │
  *   ├───────────────┴──────────────────────────────────┴─────────────┤
- *   │  Bottom console: Logs|Steps|Skills|Tools|Outputs|Meta|Trace    │
+ *   │  Bottom: Logs|Steps|Skills|Tools|Inputs|Outputs|Meta|Trace     │
  *   └────────────────────────────────────────────────────────────────┘
  *
- * Phase 5 additions:
- *   - Start Run button calls providerService → openclawProvider
- *   - Run state (RunRecord) managed by runService; updates instance status
- *   - Chat panel: real message list tied to active run; input box enabled
- *   - Runtime tab: real run status, event timeline, provider info
- *   - Bottom Logs/Steps/Trace tabs: wired to run events and step statuses
- *   - Delete Instance: confirmation dialog → removes and navigates back
- *   - Provider connection status shown in header when run is initiating
+ * Phase 8 additions:
+ *   - startRun() calls POST /api/grace/run/dispatch (real OpenClaw execute)
+ *   - Polling useEffect: polls /api/grace/run/:providerRunId/poll every 3s
+ *   - Inputs tab: InputsPanel for drag/drop uploads, links, asset list
+ *   - Chat unfurling: URLs in messages render as OutputCard previews
+ *   - OutputCard: reusable artifact/output card (compact + full modes)
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -30,8 +28,11 @@ import {
   MessageSquare, PenLine, PanelLeft, BarChart3, GitBranch,
   Info, ChevronRight, Tag, Calendar, Hash, Clock, PlayCircle,
   Activity, GripVertical, Square, Send, Plug, WifiOff,
-  CheckCircle2, Loader2, Trash2, AlertTriangle,
+  CheckCircle2, Loader2, Trash2, AlertTriangle, Paperclip, Link2, ExternalLink,
 } from "lucide-react";
+import { InputsPanel } from "../components/InputsPanel";
+import { OutputCard } from "../components/OutputCard";
+import type { OutputCardData } from "../components/OutputCard";
 import { blueprintService } from "../blueprints/blueprintService";
 import { instanceService } from "../instances/instanceService";
 import { providerService } from "../providers/providerService";
@@ -50,7 +51,7 @@ import type { StudioAgent } from "../components/GraphCanvas";
 
 type StudioMode = "landing" | "blueprint" | "instance";
 type CenterTab = "graph" | "flow" | "runtime";
-type BottomTab = "logs" | "steps" | "skills" | "tools" | "outputs" | "meta" | "trace";
+type BottomTab = "logs" | "steps" | "skills" | "tools" | "inputs" | "outputs" | "meta" | "trace";
 
 const STATUS_COLORS: Record<string, string> = {
   draft:     "text-muted-foreground bg-muted/60",
@@ -811,29 +812,47 @@ function RightPanel({
           </div>
         )}
 
-        {messages.map((msg) => (
-          <div key={msg.id} className={cn("flex flex-col", msg.role === "user" ? "items-end" : "items-start")}>
-            {msg.role === "system" ? (
-              <div className="w-full rounded border border-border/40 bg-muted/20 px-2.5 py-1.5">
-                <p className="text-[10px] text-muted-foreground/60 leading-snug">{msg.content}</p>
-              </div>
-            ) : msg.role === "user" ? (
-              <div className="max-w-[90%] rounded-lg rounded-br-none bg-[var(--grace-accent-muted)] border border-[var(--grace-accent)]/20 px-2.5 py-1.5">
-                <p className="text-xs text-foreground leading-snug">{msg.content}</p>
-                <p className="text-[9px] text-muted-foreground/40 mt-0.5 text-right">
-                  {new Date(msg.timestamp).toLocaleTimeString()}
-                </p>
-              </div>
-            ) : (
-              <div className="max-w-[90%] rounded-lg rounded-bl-none bg-card border border-border/60 px-2.5 py-1.5">
-                <p className="text-xs text-foreground leading-snug">{msg.content}</p>
-                <p className="text-[9px] text-muted-foreground/40 mt-0.5">
-                  {new Date(msg.timestamp).toLocaleTimeString()}
-                </p>
-              </div>
-            )}
-          </div>
-        ))}
+        {messages.map((msg) => {
+          const urlMatches = msg.content.match(/https?:\/\/[^\s)>]+/g) ?? [];
+          const unfurlCards: OutputCardData[] = urlMatches.map((url) => ({
+            title: (() => { try { return new URL(url).hostname; } catch { return url.slice(0, 40); } })(),
+            type: "link" as const,
+            source: msg.role === "agent" ? "agent" : "user",
+            reference: url,
+            producedAt: msg.timestamp,
+          }));
+
+          return (
+            <div key={msg.id} className={cn("flex flex-col gap-1", msg.role === "user" ? "items-end" : "items-start")}>
+              {msg.role === "system" ? (
+                <div className="w-full rounded border border-border/40 bg-muted/20 px-2.5 py-1.5">
+                  <p className="text-[10px] text-muted-foreground/60 leading-snug">{msg.content}</p>
+                </div>
+              ) : msg.role === "user" ? (
+                <div className="max-w-[90%] rounded-lg rounded-br-none bg-[var(--grace-accent-muted)] border border-[var(--grace-accent)]/20 px-2.5 py-1.5">
+                  <p className="text-xs text-foreground leading-snug">{msg.content}</p>
+                  <p className="text-[9px] text-muted-foreground/40 mt-0.5 text-right">
+                    {new Date(msg.timestamp).toLocaleTimeString()}
+                  </p>
+                </div>
+              ) : (
+                <div className="max-w-[90%] rounded-lg rounded-bl-none bg-card border border-border/60 px-2.5 py-1.5">
+                  <p className="text-xs text-foreground leading-snug">{msg.content}</p>
+                  <p className="text-[9px] text-muted-foreground/40 mt-0.5">
+                    {new Date(msg.timestamp).toLocaleTimeString()}
+                  </p>
+                </div>
+              )}
+              {unfurlCards.length > 0 && msg.role !== "system" && (
+                <div className="w-full max-w-[90%] space-y-1">
+                  {unfurlCards.map((card, i) => (
+                    <OutputCard key={i} output={card} compact />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
         <div ref={messagesEndRef} />
       </div>
 
@@ -907,6 +926,7 @@ function BottomPanel({
     { id: "steps",   label: "Steps",   icon: <ListChecks size={11} /> },
     { id: "skills",  label: "Skills",  icon: <Zap        size={11} /> },
     { id: "tools",   label: "Tools",   icon: <Wrench     size={11} /> },
+    { id: "inputs",  label: "Inputs",  icon: <Paperclip  size={11} />, instanceOnly: true  },
     { id: "outputs", label: "Outputs", icon: <FileText   size={11} />, instanceOnly: true  },
     { id: "meta",    label: "Meta",    icon: <Info       size={11} /> },
     { id: "trace",   label: "Trace",   icon: <BarChart3  size={11} />, instanceOnly: true  },
@@ -1040,6 +1060,14 @@ function BottomPanel({
                 </div>
               ))}
             </div>
+          )}
+
+          {activeTab === "inputs" && instance && (
+            <InputsPanel instanceId={instance.id} runId={runRecord?.id} />
+          )}
+
+          {activeTab === "inputs" && !instance && (
+            <p className="text-xs text-muted-foreground/40">Open an instance to manage inputs.</p>
           )}
 
           {activeTab === "outputs" && (
@@ -1251,6 +1279,82 @@ export function GraceStudio() {
 
     setInitializing(false);
   }, [blueprintId, instanceId]);
+
+  // Phase 8: Poll server for real run state when a providerRunId is present.
+  // Polls GET /api/grace/run/:providerRunId/poll every 3 seconds while running.
+  // When the run completes/fails, stops polling and syncs local RunRecord.
+  useEffect(() => {
+    const providerRunId = runRecord?.providerRunId;
+    if (!providerRunId || runRecord?.status !== "running") return;
+
+    let cancelled = false;
+
+    async function poll() {
+      try {
+        const res = await fetch(`/api/grace/run/${providerRunId}/poll`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json() as {
+          status: string;
+          events: Array<{ t: string; stream: string; chunk: string }>;
+          errorMessage?: string | null;
+          completedAt?: string | null;
+        };
+
+        if (cancelled) return;
+
+        // Append new events as run log entries (deduplicated by checking lastEventCount)
+        if (data.events && runRecord) {
+          for (const ev of data.events.slice(-10)) {
+            runService.appendEvent(runRecord.id, {
+              level: ev.stream === "stderr" ? "warn" : "info",
+              tag: ev.stream === "system" ? "GRACE" : "OPENCLAW",
+              message: ev.chunk,
+            });
+          }
+        }
+
+        if (cancelled) return;
+
+        // If terminal status, update local record
+        if (data.status === "completed" || data.status === "failed" || data.status === "cancelled") {
+          if (runRecord) {
+            runService.updateRunStatus(
+              runRecord.id,
+              data.status as "completed" | "failed" | "cancelled",
+            );
+            if (data.errorMessage) {
+              runService.appendEvent(runRecord.id, {
+                level: "warn",
+                tag: "GRACE",
+                message: `Provider reported: ${data.errorMessage}`,
+              });
+            }
+            if (!cancelled) setRunRecord(runService.getById(runRecord.id));
+          }
+          if (!cancelled && instanceId && instance) {
+            const updated = instanceService.updateStatus(
+              instanceId,
+              data.status === "completed" ? "completed" : "failed",
+            );
+            if (updated && !cancelled) setInstance(updated);
+          }
+        } else {
+          // Still running — refresh run record for latest events
+          if (!cancelled && runRecord) setRunRecord(runService.getById(runRecord.id));
+        }
+      } catch {
+        // Network error during poll — silent, will retry next tick
+      }
+    }
+
+    const intervalId = setInterval(poll, 3000);
+    void poll(); // immediate first poll
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [runRecord?.providerRunId, runRecord?.status, runRecord?.id, instance, instanceId]);
 
   async function handleStartRun() {
     if (!instance || !instanceId) return;

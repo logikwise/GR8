@@ -236,19 +236,56 @@ export const openclawProvider: IProvider = {
       };
     }
 
-    // Phase 5: Local run record — execution via gateway is Phase 6.
-    // TODO (Phase 6): POST /api/grace/provider/openclaw/run
-    // Reuse: packages/adapters/openclaw-gateway/src/server/execute.ts
-    const runId = randomId();
-    return {
-      runId,
-      startedAt: new Date().toISOString(),
-      status: "started",
-      message:
-        "Run record created locally. Full execution via OpenClaw gateway is wired in Phase 6. " +
-        "Preserved adapter: packages/adapters/openclaw-gateway.",
-      providerRunId: undefined,
-    };
+    // Phase 8: Call real server dispatch — POST /api/grace/run/dispatch
+    // Server fires packages/adapters/openclaw-gateway/src/server/execute.ts async,
+    // returns a providerRunId immediately. UI polls /api/grace/run/:id/poll for state.
+    try {
+      const res = await fetch("/api/grace/run/dispatch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: config.gatewayUrl?.trim() ?? "",
+          authToken: config.authToken?.trim() ?? "",
+          instanceId: opts.instanceId,
+          instanceName: opts.instanceName ?? opts.instanceId,
+          task: opts.steps?.map((s) => s.name).join(" → ") ?? "Execute GRACE workflow",
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (res.ok) {
+        const data = await res.json() as { runId: string; status: string; startedAt: string; message?: string };
+        const localRunId = randomId();
+        return {
+          runId: localRunId,
+          startedAt: data.startedAt,
+          status: "started",
+          providerRunId: data.runId,
+          message: data.message ?? `OpenClaw run dispatched. Provider run ID: ${data.runId}`,
+        };
+      }
+
+      // Server returned an error — fall through to local-only fallback
+      const errBody = await res.json().catch(() => ({})) as { error?: string };
+      return {
+        runId: randomId(),
+        startedAt: new Date().toISOString(),
+        status: "failed",
+        message: `Dispatch failed (HTTP ${res.status}): ${errBody.error ?? "Unknown error"}`,
+      };
+    } catch (err) {
+      // Network error or timeout — fall back to local-only mode with clear messaging
+      const isTimeout = err instanceof DOMException && err.name === "TimeoutError";
+      return {
+        runId: randomId(),
+        startedAt: new Date().toISOString(),
+        status: "started",
+        providerRunId: undefined,
+        message: isTimeout
+          ? "Server dispatch timed out. Running in local-only mode. Check that the backend is running."
+          : "Could not reach backend dispatch endpoint. Running in local-only mode.",
+      };
+    }
   },
 
   async sendChat(
