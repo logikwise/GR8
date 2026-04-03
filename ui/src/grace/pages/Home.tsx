@@ -4,6 +4,7 @@ import {
   Kanban, LayoutDashboard, Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AgentSwarm } from "../components/AgentSwarm";
 
 interface QuickLink {
   label: string;
@@ -72,9 +73,15 @@ function ComingSoonCard({ link }: { link: QuickLink }) {
 
 export function GraceHome() {
   return (
-    <div className="min-h-full flex flex-col">
-      {/* ── Hero ──────────────────────────────────────────────────────────── */}
-      <div className="px-10 pt-16 pb-10">
+    <div className="min-h-full flex flex-col relative">
+      {/* ── Ambient agent swarm (behind content) ─────────────────────── */}
+      <AgentSwarm
+        opacity={0.45}
+        className="absolute inset-0 w-full h-full"
+      />
+
+      {/* ── Hero ──────────────────────────────────────────────────────── */}
+      <div className="relative z-10 px-10 pt-16 pb-10">
         <p className="text-xs font-medium tracking-[0.2em] uppercase text-[var(--grace-accent)] mb-4 opacity-80">
           Kodavara Platform
         </p>
@@ -89,13 +96,13 @@ export function GraceHome() {
         </p>
       </div>
 
-      {/* ── Divider ───────────────────────────────────────────────────────── */}
-      <div className="px-10">
+      {/* ── Divider ───────────────────────────────────────────────────── */}
+      <div className="relative z-10 px-10">
         <div className="border-t border-border" />
       </div>
 
-      {/* ── Quick links ───────────────────────────────────────────────────── */}
-      <div className="px-10 py-8 flex-1">
+      {/* ── Quick links ───────────────────────────────────────────────── */}
+      <div className="relative z-10 px-10 py-8 flex-1">
         <p className="text-xs font-medium tracking-widest uppercase text-muted-foreground/50 mb-4">
           Quick Links
         </p>

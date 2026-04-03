@@ -1,58 +1,36 @@
 /**
- * Studio — Phase 3
+ * Studio — Phase 4
  *
  * Layout:
  *   ┌────────────────────────────────────────────────────────────────┐
  *   │  Header: back · name · badge · [Panel toggle] · [G|F|R] · CTA │
- *   ├───────────────┬─────────────────────────────────┬──────────────┤
- *   │  Left panel   │   Center canvas                 │  Right chat  │
- *   │  (toggleable) │   Graph ← or → Flow             │  panel       │
- *   │  ~220px       │   flex-1                        │  240px       │
- *   ├───────────────┴─────────────────────────────────┴──────────────┤
- *   │  Bottom: [Logs][Steps][Skills][Tools][Outputs][Meta][Trace]    │
+ *   ├───────────────┬──────────────────────────────────┬─────────────┤
+ *   │  Left panel   │   Center canvas                  │  Right chat │
+ *   │  (toggleable) │   Graph ← or → Flow ← or → Rt   │  panel      │
+ *   │  ~210px       │   + StepInspector drawer (right) │  240px      │
+ *   ├───────────────┴──────────────────────────────────┴─────────────┤
+ *   │  Bottom console: Logs|Steps|Skills|Tools|Outputs|Meta|Trace    │
  *   └────────────────────────────────────────────────────────────────┘
  *
- * Blueprint mode: read-only template. "Create Instance" is the only CTA.
- *   No management actions — those live in the Workflows library page.
- * Instance mode: configuration display + placeholder canvas.
+ * Blueprint mode: read-only. "Create Instance" is the only CTA.
+ * Instance mode: configuration + interactive canvas.
  *
- * Refresh fix: `initializing` state starts true, set false after first useEffect run.
- *   Prevents "not found" flash during auth gate resolution on hard refresh.
- *
- * GRACE-REVIEW:
- *   Phase 4 — real Flow/Graph canvas (react-flow or similar).
- *   Phase 4 — live log streaming in bottom Logs tab.
- *   Phase 4 — agent chat in right panel.
- *   Phase 4 — real Run execution via POST /api/instances/:id/run.
+ * Phase 4 additions:
+ *   - FlowView: horizontal interactive lane (FlowStepCard)
+ *   - GraphView: real force-directed canvas (GraphCanvas)
+ *   - StepInspector: right drawer inside canvas, reusable
+ *   - Runtime tab: structured placeholder with status/timeline/log
+ *   - Bottom console: improved structured tabs
  */
 
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "@/lib/router";
 import {
-  Cpu,
-  ArrowLeft,
-  AlertCircle,
-  Layers,
-  FileText,
-  Zap,
-  Wrench,
-  Users,
-  CircleDot,
-  ChevronDown,
-  ChevronUp,
-  Terminal,
-  ListChecks,
-  MessageSquare,
-  PenLine,
-  PanelLeft,
-  BarChart3,
-  GitBranch,
-  Info,
-  ChevronRight,
-  Tag,
-  Calendar,
-  Hash,
-  Clock,
+  Cpu, ArrowLeft, AlertCircle, Layers, FileText, Zap, Wrench,
+  CircleDot, ChevronDown, ChevronUp, Terminal, ListChecks,
+  MessageSquare, PenLine, PanelLeft, BarChart3, GitBranch,
+  Info, ChevronRight, Tag, Calendar, Hash, Clock, PlayCircle,
+  Activity,
 } from "lucide-react";
 import { blueprintService } from "../blueprints/blueprintService";
 import { instanceService } from "../instances/instanceService";
@@ -60,18 +38,22 @@ import { CreateInstanceModal } from "../components/CreateInstanceModal";
 import type { Blueprint, BlueprintStep } from "../blueprints/blueprintTypes";
 import type { Instance, InstanceStepSnapshot } from "../instances/instanceTypes";
 import { cn } from "@/lib/utils";
+import { FlowStepCard } from "../components/FlowStepCard";
+import type { FlowStep } from "../components/FlowStepCard";
+import { StepInspector } from "../components/StepInspector";
+import { GraphCanvas } from "../components/GraphCanvas";
 
 type StudioMode = "landing" | "blueprint" | "instance";
-type CenterTab = "graph" | "flow";
+type CenterTab = "graph" | "flow" | "runtime";
 type BottomTab = "logs" | "steps" | "skills" | "tools" | "outputs" | "meta" | "trace";
 
 const STATUS_COLORS: Record<string, string> = {
-  draft: "text-muted-foreground bg-muted/60",
-  ready: "text-sky-600 bg-sky-500/10",
-  running: "text-emerald-600 bg-emerald-500/10",
-  paused: "text-amber-600 bg-amber-500/10",
+  draft:     "text-muted-foreground bg-muted/60",
+  ready:     "text-sky-600 bg-sky-500/10",
+  running:   "text-emerald-600 bg-emerald-500/10",
+  paused:    "text-amber-600 bg-amber-500/10",
   completed: "text-blue-600 bg-blue-500/10",
-  failed: "text-destructive bg-destructive/10",
+  failed:    "text-destructive bg-destructive/10",
   cancelled: "text-muted-foreground bg-muted/40",
 };
 
@@ -103,9 +85,7 @@ function MetaLine({ icon, label, value }: { icon?: React.ReactNode; label: strin
 }
 
 function LeftPanel({ mode, blueprint, instance }: {
-  mode: StudioMode;
-  blueprint?: Blueprint | null;
-  instance?: Instance | null;
+  mode: StudioMode; blueprint?: Blueprint | null; instance?: Instance | null;
 }) {
   return (
     <aside className="flex w-52 shrink-0 flex-col border-r border-border bg-card/20 overflow-y-auto">
@@ -121,7 +101,6 @@ function LeftPanel({ mode, blueprint, instance }: {
             <MetaLine icon={<Wrench size={10} />} label="Tools" value={[...new Set(blueprint.steps.flatMap((s) => s.tools ?? []).map((t) => t.id))].length || undefined} />
             <MetaLine icon={<Calendar size={10} />} label="Updated" value={blueprint.updatedAt ? new Date(blueprint.updatedAt).toLocaleDateString() : undefined} />
           </LeftPanelSection>
-
           {(blueprint.agentConfig.primary || (blueprint.agentConfig.specialists?.length ?? 0) > 0) && (
             <LeftPanelSection title="Agents">
               {blueprint.agentConfig.primary && (
@@ -144,7 +123,6 @@ function LeftPanel({ mode, blueprint, instance }: {
               ))}
             </LeftPanelSection>
           )}
-
           {blueprint.ui?.tags && blueprint.ui.tags.length > 0 && (
             <LeftPanelSection title="Tags">
               <div className="flex flex-wrap gap-1">
@@ -154,7 +132,6 @@ function LeftPanel({ mode, blueprint, instance }: {
               </div>
             </LeftPanelSection>
           )}
-
           {blueprint.description && (
             <LeftPanelSection title="Description">
               <p className="text-xs text-muted-foreground leading-relaxed">{blueprint.description}</p>
@@ -177,7 +154,6 @@ function LeftPanel({ mode, blueprint, instance }: {
             <MetaLine icon={<Clock size={10} />} label="Created" value={new Date(instance.createdAt).toLocaleDateString()} />
             <MetaLine icon={<ListChecks size={10} />} label="Steps" value={instance.graphSnapshot.length} />
           </LeftPanelSection>
-
           {instance.agentAssignments.length > 0 && (
             <LeftPanelSection title="Agents">
               {instance.agentAssignments.map((a) => (
@@ -191,7 +167,6 @@ function LeftPanel({ mode, blueprint, instance }: {
               ))}
             </LeftPanelSection>
           )}
-
           {instance.configSnapshot.length > 0 && (
             <LeftPanelSection title="Configuration">
               {instance.configSnapshot.map((ans) => (
@@ -221,15 +196,10 @@ function StudioHeader({
   mode, blueprint, instance, leftOpen, onToggleLeft,
   centerTab, onCenterTab, onBack, onCreateInstance,
 }: {
-  mode: StudioMode;
-  blueprint?: Blueprint | null;
-  instance?: Instance | null;
-  leftOpen: boolean;
-  onToggleLeft: () => void;
-  centerTab: CenterTab;
-  onCenterTab: (t: CenterTab) => void;
-  onBack: () => void;
-  onCreateInstance?: () => void;
+  mode: StudioMode; blueprint?: Blueprint | null; instance?: Instance | null;
+  leftOpen: boolean; onToggleLeft: () => void;
+  centerTab: CenterTab; onCenterTab: (t: CenterTab) => void;
+  onBack: () => void; onCreateInstance?: () => void;
 }) {
   return (
     <div className="shrink-0 border-b border-border px-3 py-2 flex items-center gap-2 bg-card/60">
@@ -243,27 +213,24 @@ function StudioHeader({
         <button type="button" onClick={onToggleLeft}
           className={cn(
             "flex items-center justify-center w-7 h-7 rounded transition-colors shrink-0",
-            leftOpen
-              ? "text-[var(--grace-accent)] bg-[var(--grace-accent-muted)]"
-              : "text-muted-foreground hover:text-foreground hover:bg-accent"
+            leftOpen ? "text-[var(--grace-accent)] bg-[var(--grace-accent-muted)]"
+                     : "text-muted-foreground hover:text-foreground hover:bg-accent"
           )}
           title={leftOpen ? "Hide panel" : "Show panel"}>
           <PanelLeft size={14} />
         </button>
       )}
 
-      {/* Name */}
       <div className="flex items-center gap-1.5 min-w-0">
         {mode === "blueprint" && <PenLine size={13} className="text-[var(--grace-accent)] shrink-0" />}
-        {mode === "instance" && <Cpu size={13} className="text-[var(--grace-accent)] shrink-0" />}
+        {mode === "instance"  && <Cpu      size={13} className="text-[var(--grace-accent)] shrink-0" />}
         <span className="text-sm font-semibold truncate">
-          {mode === "landing" && "Studio"}
+          {mode === "landing"   && "Studio"}
           {mode === "blueprint" && (blueprint?.name ?? "Blueprint")}
-          {mode === "instance" && (instance?.name ?? "Instance")}
+          {mode === "instance"  && (instance?.name  ?? "Instance")}
         </span>
       </div>
 
-      {/* Badge */}
       {mode === "blueprint" && (
         <span className="shrink-0 rounded border border-[var(--grace-accent)]/40 bg-[var(--grace-accent-muted)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--grace-accent)] uppercase tracking-wide">
           Blueprint
@@ -278,7 +245,7 @@ function StudioHeader({
       {/* Center tab switcher */}
       {mode !== "landing" && (
         <div className="flex items-center mx-auto border border-border rounded overflow-hidden text-xs">
-          {(["graph", "flow"] as CenterTab[]).map((tab, i) => (
+          {(["graph", "flow", "runtime"] as CenterTab[]).map((tab, i) => (
             <button key={tab} type="button" onClick={() => onCenterTab(tab)}
               className={cn(
                 "px-3 py-1 capitalize transition-colors",
@@ -287,18 +254,14 @@ function StudioHeader({
                   : "text-muted-foreground/60 hover:text-muted-foreground",
                 i > 0 && "border-l border-border"
               )}>
-              {tab === "graph" ? "Graph" : "Flow"}
+              {tab === "graph"   ? "Graph"   :
+               tab === "flow"    ? "Flow"    :
+               "Runtime"}
             </button>
           ))}
-          <button type="button" disabled
-            className="px-3 py-1 text-muted-foreground/30 border-l border-border cursor-not-allowed"
-            title="Runtime coming in Phase 4">
-            Runtime
-          </button>
         </div>
       )}
 
-      {/* Right controls */}
       <div className="ml-auto flex items-center gap-2 shrink-0">
         {mode === "blueprint" && (
           <button type="button" onClick={onCreateInstance}
@@ -307,9 +270,9 @@ function StudioHeader({
           </button>
         )}
         {mode === "instance" && (
-          <button type="button" disabled title="Execution coming in Phase 4"
+          <button type="button" disabled title="Execution wiring coming post-Phase 4"
             className="flex items-center gap-1.5 rounded border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground cursor-not-allowed opacity-40">
-            Start Run
+            <PlayCircle size={12} />Start Run
           </button>
         )}
       </div>
@@ -317,66 +280,17 @@ function StudioHeader({
   );
 }
 
-// ─── Flow View ─────────────────────────────────────────────────────────────────
+// ─── Flow View (horizontal lane) ──────────────────────────────────────────────
 
-type FlowStep = {
-  id: string;
-  name: string;
-  description?: string;
-  agentRole?: string;
-  skills?: { id: string; name: string }[];
-  tools?: { id: string; name: string }[];
-};
-
-function FlowStepCard({ step, index, total }: { step: FlowStep; index: number; total: number }) {
-  return (
-    <div className="flex flex-col gap-0">
-      <div className="rounded-lg border border-border bg-card p-4 transition-colors hover:border-[var(--grace-accent)]/40">
-        <div className="flex items-start gap-3">
-          {/* Step number */}
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-[var(--grace-accent)]/60 text-xs font-bold text-[var(--grace-accent)]">
-            {index + 1}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-semibold">{step.name}</span>
-              {step.agentRole && (
-                <span className="text-[10px] rounded bg-muted/60 px-1.5 py-0.5 text-muted-foreground capitalize">{step.agentRole}</span>
-              )}
-            </div>
-            {step.description && (
-              <p className="mt-1 text-xs text-muted-foreground">{step.description}</p>
-            )}
-            {((step.skills && step.skills.length > 0) || (step.tools && step.tools.length > 0)) && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {step.skills?.map((skill) => (
-                  <span key={skill.id} className="flex items-center gap-1 rounded border border-[var(--grace-accent)]/20 bg-[var(--grace-accent-muted)] px-1.5 py-0.5 text-[10px] text-[var(--grace-accent)]">
-                    <Zap size={9} />{skill.name}
-                  </span>
-                ))}
-                {step.tools?.map((tool) => (
-                  <span key={tool.id} className="flex items-center gap-1 rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                    <Wrench size={9} />{tool.name}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-      {index < total - 1 && (
-        <div className="flex justify-start ml-6 py-0.5">
-          <div className="flex flex-col items-center gap-0.5">
-            <div className="w-px h-3 bg-[var(--grace-accent)]/30" />
-            <ChevronDown size={10} className="text-[var(--grace-accent)]/40 -mt-1" />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function FlowView({ steps }: { steps: FlowStep[] }) {
+function FlowView({
+  steps,
+  selectedStep,
+  onInspect,
+}: {
+  steps: FlowStep[];
+  selectedStep: FlowStep | null;
+  onInspect: (step: FlowStep) => void;
+}) {
   if (steps.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
@@ -385,75 +299,119 @@ function FlowView({ steps }: { steps: FlowStep[] }) {
       </div>
     );
   }
-  return (
-    <div className="flex flex-1 flex-col overflow-y-auto p-5 gap-0">
-      {steps.map((step, i) => (
-        <FlowStepCard key={step.id} step={step} index={i} total={steps.length} />
-      ))}
-    </div>
-  );
-}
-
-// ─── Graph View ────────────────────────────────────────────────────────────────
-
-function GraphView({ steps, mode }: { steps: FlowStep[]; mode: StudioMode }) {
-  if (steps.length === 0) {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
-        <GitBranch size={28} className="text-muted-foreground/20 mb-3" />
-        <p className="text-sm text-muted-foreground/50">No nodes to display.</p>
-      </div>
-    );
-  }
 
   return (
-    <div className="flex-1 overflow-auto p-6 relative">
-      <style>{`
-        @keyframes grace-node-pulse {
-          0%, 100% { box-shadow: 0 0 0 0 var(--grace-accent-muted); }
-          50% { box-shadow: 0 0 0 4px var(--grace-accent-muted); }
-        }
-        .grace-node { animation: grace-node-pulse 3s ease-in-out infinite; }
-        .grace-node:nth-child(3n+1) { animation-delay: 0s; }
-        .grace-node:nth-child(3n+2) { animation-delay: 1s; }
-        .grace-node:nth-child(3n+3) { animation-delay: 2s; }
-      `}</style>
-
-      <p className="mb-4 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/40">
-        {mode === "blueprint" ? "Blueprint" : "Instance"} Graph · Phase 3 Placeholder
-      </p>
-
-      <div className="flex flex-wrap gap-3 items-start">
-        {steps.map((step, i) => (
-          <div key={step.id} className="flex items-center gap-2">
-            <div className="grace-node flex flex-col items-center gap-1.5 rounded-xl border border-[var(--grace-accent)]/30 bg-[var(--grace-accent-muted)] p-3 w-36 cursor-default select-none hover:border-[var(--grace-accent)]/60 transition-colors">
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--grace-accent)]/20 text-[10px] font-bold text-[var(--grace-accent)]">
-                {i + 1}
-              </div>
-              <CircleDot size={10} className="text-[var(--grace-accent)]/50" />
-              <span className="text-center text-[11px] font-medium text-foreground leading-tight line-clamp-2">{step.name}</span>
-              {step.agentRole && (
-                <span className="text-[9px] text-muted-foreground/60 capitalize">{step.agentRole}</span>
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex-1 overflow-x-auto overflow-y-auto">
+        <div
+          className="flex items-start gap-0 px-6 py-8 min-h-full"
+          style={{ width: "max-content", minWidth: "100%" }}
+        >
+          {steps.map((step, i) => (
+            <div key={step.id} className="flex items-center gap-0 shrink-0">
+              <FlowStepCard
+                step={step}
+                index={i}
+                focused={selectedStep?.id === step.id}
+                onInspect={onInspect}
+              />
+              {i < steps.length - 1 && (
+                <div className="flex items-center px-2 shrink-0">
+                  <div className="h-px w-6 bg-gradient-to-r from-[var(--grace-accent)]/40 to-[var(--grace-accent)]/20" />
+                  <ChevronRight size={12} className="text-[var(--grace-accent)]/40 -ml-1.5" />
+                </div>
               )}
             </div>
-            {i < steps.length - 1 && (
-              <div className="flex items-center gap-1">
-                <div className="h-px w-5 bg-gradient-to-r from-[var(--grace-accent)]/40 to-[var(--grace-accent)]/20" />
-                <ChevronRight size={10} className="text-[var(--grace-accent)]/40 -ml-1.5" />
-              </div>
-            )}
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
-      <div className="mt-6 text-[10px] text-muted-foreground/30 italic">
-        Phase 4 — interactive graph canvas with react-flow or equivalent
+      {/* Horizontal scroll hint */}
+      {steps.length > 3 && (
+        <div className="shrink-0 flex items-center justify-center py-1.5 border-t border-border/30">
+          <span className="text-[10px] text-muted-foreground/25">scroll horizontally to see all steps</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Runtime View ──────────────────────────────────────────────────────────────
+
+function RuntimeView({ mode, instance }: { mode: StudioMode; instance?: Instance | null }) {
+  const status = mode === "instance" && instance ? instance.status : "idle";
+
+  return (
+    <div className="flex flex-1 flex-col overflow-y-auto p-5 gap-5">
+      {/* Status bar */}
+      <div className="rounded-lg border border-border bg-card/60 p-4 flex items-center gap-3">
+        <div className={cn(
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+          status === "running" ? "bg-emerald-500/15" : "bg-muted/40"
+        )}>
+          <Activity size={16} className={status === "running" ? "text-emerald-500" : "text-muted-foreground/40"} />
+        </div>
+        <div>
+          <p className="text-sm font-medium">
+            {status === "running" ? "Run in progress" : "No active run"}
+          </p>
+          <p className="text-xs text-muted-foreground/60 mt-0.5">
+            {status === "running"
+              ? "Execution is live — logs are streaming."
+              : "Start a run to see live execution here."}
+          </p>
+        </div>
+        <div className="ml-auto">
+          <span className={cn(
+            "rounded px-2 py-1 text-[10px] font-medium uppercase",
+            STATUS_COLORS[status] ?? STATUS_COLORS.draft
+          )}>
+            {status}
+          </span>
+        </div>
+      </div>
+
+      {/* Timeline placeholder */}
+      <div>
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40 mb-2">
+          Execution Timeline
+        </p>
+        <div className="rounded-lg border border-border/50 bg-card/40 p-4 space-y-2 opacity-40 pointer-events-none" aria-hidden>
+          {["Initialise", "Step 1 — Planning", "Step 2 — Research", "Step 3 — Synthesis", "Finalise"].map((s, i) => (
+            <div key={s} className="flex items-center gap-3 text-xs">
+              <div className={cn("w-2 h-2 rounded-full shrink-0", i === 0 ? "bg-emerald-500/60" : "bg-muted-foreground/30")} />
+              <span className="text-muted-foreground">{s}</span>
+              <div className="flex-1 h-px bg-muted/40" />
+              <span className="text-muted-foreground/50 text-[10px]">—</span>
+            </div>
+          ))}
+        </div>
+        <p className="mt-1.5 text-[10px] text-muted-foreground/30">Wired to live runtime in execution phase</p>
+      </div>
+
+      {/* Log stream placeholder */}
+      <div>
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40 mb-2">
+          Log Stream
+        </p>
+        <div className="rounded-lg border border-border/50 bg-black/20 font-mono p-3 space-y-1 opacity-30 pointer-events-none" aria-hidden>
+          {[
+            "> [GRACE] Runtime initialised",
+            "> [AGENT] Primary agent connected",
+            "> [STEP 1] Starting: Planning",
+            "> [TOOL] web_search called with query='…'",
+            "> [STEP 2] Starting: Research",
+          ].map((line) => (
+            <p key={line} className="text-[10px] text-emerald-400/80">{line}</p>
+          ))}
+        </div>
+        <p className="mt-1.5 text-[10px] text-muted-foreground/30">Live log streaming — execution phase</p>
       </div>
     </div>
   );
 }
 
-// ─── Landing Canvas (atmospheric) ─────────────────────────────────────────────
+// ─── Landing Canvas ────────────────────────────────────────────────────────────
 
 function LandingCanvas() {
   return (
@@ -474,8 +432,6 @@ function LandingCanvas() {
         .grace-ping:nth-child(2) { animation-delay: 0.7s; }
         .grace-ping:nth-child(3) { animation-delay: 1.4s; }
       `}</style>
-
-      {/* Ghost activity cards (background atmosphere) */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none select-none" aria-hidden>
         <div className="grace-ghost absolute top-12 left-8 w-48 h-16 rounded-lg border border-border/30 bg-card/20 p-3">
           <div className="h-2 w-20 rounded bg-muted/40 mb-1.5" />
@@ -491,14 +447,10 @@ function LandingCanvas() {
           <div className="h-1.5 w-36 rounded bg-muted/25" />
           <div className="h-1.5 w-20 rounded bg-muted/20 mt-1" />
         </div>
-
-        {/* Status ping dots */}
         <div className="grace-ping absolute top-8 right-1/3 w-2 h-2 rounded-full bg-[var(--grace-accent)]/40" />
         <div className="grace-ping absolute bottom-32 right-16 w-1.5 h-1.5 rounded-full bg-emerald-500/30" />
         <div className="grace-ping absolute top-1/2 left-16 w-1.5 h-1.5 rounded-full bg-[var(--grace-accent)]/30" />
       </div>
-
-      {/* Center message */}
       <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center relative z-10">
         <div className="rounded-full border border-[var(--grace-accent)]/20 bg-[var(--grace-accent-muted)] p-4">
           <Cpu size={28} className="text-[var(--grace-accent)]/60" />
@@ -521,11 +473,17 @@ function LandingCanvas() {
 
 // ─── Center Canvas ─────────────────────────────────────────────────────────────
 
-function CenterCanvas({ mode, blueprint, instance, centerTab }: {
+function CenterCanvas({
+  mode, blueprint, instance, centerTab,
+  selectedStep, onInspect, onInspectorClose,
+}: {
   mode: StudioMode;
   blueprint?: Blueprint | null;
   instance?: Instance | null;
   centerTab: CenterTab;
+  selectedStep: FlowStep | null;
+  onInspect: (step: FlowStep) => void;
+  onInspectorClose: () => void;
 }) {
   if (mode === "landing") return <LandingCanvas />;
 
@@ -542,20 +500,37 @@ function CenterCanvas({ mode, blueprint, instance, centerTab }: {
       : [];
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="flex flex-1 flex-col overflow-hidden min-w-0">
       {/* Blueprint template banner */}
       {mode === "blueprint" && (
         <div className="shrink-0 flex items-center gap-2 bg-[var(--grace-accent-muted)]/60 border-b border-[var(--grace-accent)]/20 px-4 py-1.5">
           <PenLine size={11} className="text-[var(--grace-accent)]/70" />
           <span className="text-xs text-[var(--grace-accent)]">
             <span className="font-semibold">Blueprint template</span>
-            <span className="ml-1.5 opacity-70">— read-only view. Use "Create Instance" to execute this workflow.</span>
+            <span className="ml-1.5 opacity-70">— read-only. Use "Create Instance" to execute this workflow.</span>
           </span>
         </div>
       )}
 
-      {centerTab === "flow" && <FlowView steps={steps} />}
-      {centerTab === "graph" && <GraphView steps={steps} mode={mode} />}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Main canvas area */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {centerTab === "flow" && (
+            <FlowView steps={steps} selectedStep={selectedStep} onInspect={onInspect} />
+          )}
+          {centerTab === "graph" && (
+            <GraphCanvas steps={steps} onStepInspect={onInspect} />
+          )}
+          {centerTab === "runtime" && (
+            <RuntimeView mode={mode} instance={instance} />
+          )}
+        </div>
+
+        {/* Step Inspector drawer */}
+        {selectedStep && (
+          <StepInspector step={selectedStep} onClose={onInspectorClose} />
+        )}
+      </div>
     </div>
   );
 }
@@ -563,25 +538,21 @@ function CenterCanvas({ mode, blueprint, instance, centerTab }: {
 // ─── Right Panel ───────────────────────────────────────────────────────────────
 
 function RightPanel({ mode }: { mode: StudioMode }) {
-  const [message, setMessage] = useState("");
-
   return (
     <aside className="flex w-56 shrink-0 flex-col border-l border-border bg-card/20">
       <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2">
         <MessageSquare size={12} className="text-muted-foreground/60" />
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Chat</p>
         {mode !== "landing" && (
-          <span className="ml-auto text-[10px] text-muted-foreground/40">Phase 4</span>
+          <span className="ml-auto text-[10px] text-muted-foreground/40">Execution phase</span>
         )}
       </div>
-
       <div className="flex-1 flex flex-col items-center justify-center p-4 gap-3">
         {mode === "landing" ? (
           <p className="text-xs text-muted-foreground/30 text-center">No item open</p>
         ) : (
           <>
             <div className="w-full space-y-1.5 opacity-40 pointer-events-none select-none" aria-hidden>
-              {/* Ghost messages for atmosphere */}
               <div className="ml-auto w-4/5 rounded-lg rounded-br-none bg-[var(--grace-accent-muted)] px-2.5 py-1.5">
                 <div className="h-1.5 w-full rounded bg-[var(--grace-accent)]/20 mb-1" />
                 <div className="h-1.5 w-3/4 rounded bg-[var(--grace-accent)]/15" />
@@ -592,12 +563,11 @@ function RightPanel({ mode }: { mode: StudioMode }) {
               </div>
             </div>
             <p className="text-[10px] text-muted-foreground/35 text-center leading-relaxed">
-              Agent chat will be available during runs in Phase 4.
+              Agent chat will be available during runs.
             </p>
           </>
         )}
       </div>
-
       {mode !== "landing" && (
         <div className="border-t border-border/60 p-2">
           <div className="flex items-center gap-2 rounded border border-border/60 bg-muted/20 px-3 py-1.5 opacity-50 cursor-not-allowed">
@@ -611,10 +581,18 @@ function RightPanel({ mode }: { mode: StudioMode }) {
 
 // ─── Bottom Panel ──────────────────────────────────────────────────────────────
 
+function MetaItem({ label, value }: { label: string; value?: string }) {
+  if (!value) return null;
+  return (
+    <div className="flex gap-2 text-xs py-0.5">
+      <span className="text-muted-foreground/60 shrink-0 w-20">{label}</span>
+      <span className="text-foreground truncate">{value}</span>
+    </div>
+  );
+}
+
 function BottomPanel({ mode, blueprint, instance }: {
-  mode: StudioMode;
-  blueprint?: Blueprint | null;
-  instance?: Instance | null;
+  mode: StudioMode; blueprint?: Blueprint | null; instance?: Instance | null;
 }) {
   const [activeTab, setActiveTab] = useState<BottomTab>("logs");
   const [open, setOpen] = useState(true);
@@ -632,13 +610,13 @@ function BottomPanel({ mode, blueprint, instance }: {
   const outputs = mode === "blueprint" ? (blueprint?.outputs ?? []) : [];
 
   const TABS: { id: BottomTab; label: string; icon: React.ReactNode }[] = [
-    { id: "logs",    label: "Logs",    icon: <Terminal size={11} /> },
+    { id: "logs",    label: "Logs",    icon: <Terminal   size={11} /> },
     { id: "steps",   label: "Steps",   icon: <ListChecks size={11} /> },
-    { id: "skills",  label: "Skills",  icon: <Zap size={11} /> },
-    { id: "tools",   label: "Tools",   icon: <Wrench size={11} /> },
-    { id: "outputs", label: "Outputs", icon: <FileText size={11} /> },
-    { id: "meta",    label: "Meta",    icon: <Info size={11} /> },
-    { id: "trace",   label: "Trace",   icon: <BarChart3 size={11} /> },
+    { id: "skills",  label: "Skills",  icon: <Zap        size={11} /> },
+    { id: "tools",   label: "Tools",   icon: <Wrench     size={11} /> },
+    { id: "outputs", label: "Outputs", icon: <FileText   size={11} /> },
+    { id: "meta",    label: "Meta",    icon: <Info       size={11} /> },
+    { id: "trace",   label: "Trace",   icon: <BarChart3  size={11} /> },
   ];
 
   return (
@@ -666,16 +644,26 @@ function BottomPanel({ mode, blueprint, instance }: {
       {open && (
         <div className="flex-1 overflow-y-auto px-4 py-2">
           {activeTab === "logs" && (
-            <div className="font-mono space-y-0.5">
-              <p className="text-xs text-muted-foreground/40">
-                {mode === "landing" && "> Studio ready. Open a Blueprint or Instance to begin."}
-                {mode === "blueprint" && `> Blueprint loaded — template mode. v${blueprint?.version ?? "?"} · ${steps.length} steps.`}
-                {mode === "instance" && `> Instance loaded — status: ${instance?.status ?? "draft"}. Execution wiring coming in Phase 4.`}
-              </p>
+            <div className="font-mono space-y-1">
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground/50">
+                <span className="text-emerald-500/60">›</span>
+                <span>
+                  {mode === "landing"    && "Studio ready. Open a Blueprint or Instance to begin."}
+                  {mode === "blueprint"  && `Blueprint loaded — template mode · v${blueprint?.version ?? "?"} · ${steps.length} step(s) defined.`}
+                  {mode === "instance"   && `Instance loaded — status: ${instance?.status ?? "draft"} · ${steps.length} step(s).`}
+                </span>
+              </div>
               {mode !== "landing" && (
-                <p className="text-xs text-muted-foreground/25">
-                  {">"} Runtime log stream will appear here during runs.
-                </p>
+                <>
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground/30">
+                    <span className="text-muted-foreground/20">›</span>
+                    <span>Runtime log stream will appear here during active runs.</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground/20 mt-1">
+                    <span className="text-muted-foreground/15">›</span>
+                    <span>Graph | Flow | Runtime views available via header tabs.</span>
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -687,6 +675,9 @@ function BottomPanel({ mode, blueprint, instance }: {
                 <div key={step.id} className="flex items-center gap-1.5 rounded border border-border/60 bg-muted/30 px-2.5 py-1 text-xs">
                   <span className="font-bold text-[var(--grace-accent)]/60 text-[10px]">{idx + 1}</span>
                   <span>{step.name}</span>
+                  {step.agentRole && (
+                    <span className="text-[9px] text-muted-foreground/50 capitalize ml-1">· {step.agentRole}</span>
+                  )}
                 </div>
               ))}
             </div>
@@ -694,10 +685,12 @@ function BottomPanel({ mode, blueprint, instance }: {
 
           {activeTab === "skills" && (
             <div className="flex flex-wrap gap-2">
-              {allSkills.length === 0 && <p className="text-xs text-muted-foreground/40">No skills attached to this blueprint.</p>}
+              {allSkills.length === 0 && <p className="text-xs text-muted-foreground/40">No skills defined.</p>}
               {allSkills.map((skill) => (
                 <div key={skill.id} className="flex items-center gap-1.5 rounded border border-[var(--grace-accent)]/20 bg-[var(--grace-accent-muted)] px-2.5 py-1 text-xs">
-                  <Zap size={10} className="text-[var(--grace-accent)]/60" />{skill.name}
+                  <Zap size={10} className="text-[var(--grace-accent)]/60" />
+                  {skill.name}
+                  <span className="text-[9px] text-muted-foreground/40">· skill</span>
                 </div>
               ))}
             </div>
@@ -705,23 +698,26 @@ function BottomPanel({ mode, blueprint, instance }: {
 
           {activeTab === "tools" && (
             <div className="flex flex-wrap gap-2">
-              {allTools.length === 0 && <p className="text-xs text-muted-foreground/40">No tools attached to this blueprint.</p>}
+              {allTools.length === 0 && <p className="text-xs text-muted-foreground/40">No tools defined.</p>}
               {allTools.map((tool) => (
                 <div key={tool.id} className="flex items-center gap-1.5 rounded border border-border/60 bg-muted/30 px-2.5 py-1 text-xs">
-                  <Wrench size={10} className="text-muted-foreground/60" />{tool.name}
+                  <Wrench size={10} className="text-muted-foreground/60" />
+                  {tool.name}
+                  <span className="text-[9px] text-muted-foreground/40">· tool</span>
                 </div>
               ))}
             </div>
           )}
 
           {activeTab === "outputs" && (
-            <div className="flex flex-wrap gap-2">
+            <div className="space-y-1.5">
               {outputs.length === 0 && <p className="text-xs text-muted-foreground/40">No outputs defined.</p>}
               {outputs.map((out) => (
-                <div key={out.id} className="flex items-center gap-2 rounded border border-border/60 bg-muted/30 px-2.5 py-1 text-xs">
+                <div key={out.id} className="flex items-center gap-2 rounded border border-border/60 bg-muted/30 px-2.5 py-1.5 text-xs">
                   <FileText size={10} className="text-muted-foreground/60" />
                   <span className="font-medium">{out.name}</span>
-                  <span className="text-muted-foreground/60">{out.type}</span>
+                  <span className="rounded bg-muted/60 px-1 py-px text-[9px] text-muted-foreground">{out.type}</span>
+                  <span className="ml-auto text-[9px] text-muted-foreground/30">pending</span>
                 </div>
               ))}
             </div>
@@ -760,16 +756,22 @@ function BottomPanel({ mode, blueprint, instance }: {
           )}
 
           {activeTab === "trace" && (
-            <div className="space-y-1.5">
-              <p className="text-xs text-muted-foreground/40">Execution trace will appear here during and after runs.</p>
-              {/* Phase 4: execution trace entries streamed from runtime */}
-              <div className="flex flex-wrap gap-2 opacity-25 pointer-events-none" aria-hidden>
-                {["Init", "Step 1", "Step 2", "Complete"].map((step) => (
-                  <div key={step} className="flex items-center gap-2 rounded border border-border/60 bg-muted/30 px-2.5 py-1 text-xs">
-                    <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
-                    <span>{step}</span>
-                    <span className="text-muted-foreground/40">—</span>
-                    <span className="text-muted-foreground/40">Phase 4</span>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground/50">
+                <span className="text-muted-foreground/30">›</span>
+                <span>Execution trace entries will stream here during and after runs.</span>
+              </div>
+              <div className="flex flex-wrap gap-2 opacity-20 pointer-events-none" aria-hidden>
+                {[
+                  { label: "Init",      status: "ok" },
+                  { label: "Step 1",    status: "ok" },
+                  { label: "Tool call", status: "ok" },
+                  { label: "Step 2",    status: "pending" },
+                  { label: "Complete",  status: "pending" },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center gap-2 rounded border border-border/60 bg-muted/30 px-2.5 py-1 text-xs">
+                    <div className={cn("w-1.5 h-1.5 rounded-full", item.status === "ok" ? "bg-emerald-500/60" : "bg-muted-foreground/40")} />
+                    <span>{item.label}</span>
                   </div>
                 ))}
               </div>
@@ -781,23 +783,12 @@ function BottomPanel({ mode, blueprint, instance }: {
   );
 }
 
-function MetaItem({ label, value }: { label: string; value?: string }) {
-  if (!value) return null;
-  return (
-    <div className="flex gap-2 text-xs py-0.5">
-      <span className="text-muted-foreground/60 shrink-0 w-20">{label}</span>
-      <span className="text-foreground truncate">{value}</span>
-    </div>
-  );
-}
-
 // ─── Root ──────────────────────────────────────────────────────────────────────
 
 export function GraceStudio() {
   const { blueprintId, instanceId } = useParams<{ blueprintId?: string; instanceId?: string }>();
   const navigate = useNavigate();
 
-  // initializing = true prevents "not found" flash during auth-gate resolution on hard refresh
   const [initializing, setInitializing] = useState(true);
   const [blueprint, setBlueprint] = useState<Blueprint | null>(null);
   const [instance, setInstance] = useState<Instance | null>(null);
@@ -806,22 +797,30 @@ export function GraceStudio() {
   const [leftOpen, setLeftOpen] = useState(false);
   const [centerTab, setCenterTab] = useState<CenterTab>("flow");
 
+  // Step inspector state — shared across Flow and Graph
+  const [selectedStep, setSelectedStep] = useState<FlowStep | null>(null);
+
   const mode: StudioMode = blueprintId ? "blueprint" : instanceId ? "instance" : "landing";
+
+  // Close inspector when tab changes to runtime
+  function handleCenterTab(tab: CenterTab) {
+    setCenterTab(tab);
+    if (tab === "runtime") setSelectedStep(null);
+  }
 
   useEffect(() => {
     setInitializing(true);
     setNotFound(false);
     setBlueprint(null);
     setInstance(null);
+    setSelectedStep(null);
 
     if (blueprintId) {
       const bp = blueprintService.getById(blueprintId);
-      if (bp) setBlueprint(bp);
-      else setNotFound(true);
+      if (bp) setBlueprint(bp); else setNotFound(true);
     } else if (instanceId) {
       const inst = instanceService.getById(instanceId);
-      if (inst) setInstance(inst);
-      else setNotFound(true);
+      if (inst) setInstance(inst); else setNotFound(true);
     }
 
     setInitializing(false);
@@ -838,7 +837,6 @@ export function GraceStudio() {
     navigate(`/grace/studio/instance/${newInstance.id}`);
   }
 
-  // Loading skeleton (prevents not-found flash on hard refresh)
   if (initializing && (blueprintId || instanceId)) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3">
@@ -867,15 +865,10 @@ export function GraceStudio() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <StudioHeader
-        mode={mode}
-        blueprint={blueprint}
-        instance={instance}
-        leftOpen={leftOpen}
-        onToggleLeft={() => setLeftOpen((o) => !o)}
-        centerTab={centerTab}
-        onCenterTab={setCenterTab}
-        onBack={handleBack}
-        onCreateInstance={() => setCreateInstanceOpen(true)}
+        mode={mode} blueprint={blueprint} instance={instance}
+        leftOpen={leftOpen} onToggleLeft={() => setLeftOpen((o) => !o)}
+        centerTab={centerTab} onCenterTab={handleCenterTab}
+        onBack={handleBack} onCreateInstance={() => setCreateInstanceOpen(true)}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -884,10 +877,11 @@ export function GraceStudio() {
         )}
 
         <CenterCanvas
-          mode={mode}
-          blueprint={blueprint}
-          instance={instance}
+          mode={mode} blueprint={blueprint} instance={instance}
           centerTab={centerTab}
+          selectedStep={selectedStep}
+          onInspect={(step) => setSelectedStep(step)}
+          onInspectorClose={() => setSelectedStep(null)}
         />
 
         <RightPanel mode={mode} />

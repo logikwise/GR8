@@ -1,0 +1,336 @@
+Continue the GRACE staged refactor. Read and follow these files first:
+
+* docs/product-model.md
+* docs/architecture-plan.md
+* docs/studio-spec.md
+* docs/replit-guardrails.md
+
+This is Phase 4.
+
+Do NOT remove backend/runtime/orchestration/adapters.
+Do NOT break provider-agnostic design (OpenClaw now, Hermes/Claude/Codex later).
+Do NOT implement fake execution logic that conflicts with real runtime.
+
+This phase focuses on:
+
+* upgrading Flow into a horizontal interactive lane
+* building a real Graph mode (force/interactive)
+* adding step-level inspection
+* adding ambient workspace swarm (Home/Workspace)
+* preparing runtime surfaces without fully wiring execution
+
+---
+
+# 🔥 Phase 4 goals
+
+1. Replace current Flow view with a horizontal, fluid, interactive step lane
+2. Replace placeholder Graph view with a true interactive graph (force-directed or equivalent)
+3. Add step-level inspect/focus interactions
+4. Add ambient agent swarm to Home and Workspace
+5. Improve Studio interactivity without introducing real execution yet
+6. Keep all structures modular for future Mission Control + multi-provider support
+
+---
+
+# 🧭 Core product rules (must be preserved)
+
+* Blueprint = template only, cannot run
+* Instance = executable snapshot (future execution)
+* Studio Graph = instance-contained (NOT workspace swarm)
+* Workspace swarm = outside Studio only
+* Flow = structured sequence
+* Graph = relationship + activity visualization
+* Runtime = separate view layer (logs/traces/etc)
+
+---
+
+# 🧱 A. FLOW VIEW (MAJOR UPGRADE)
+
+Replace the current vertical/static flow with a **horizontal, fluid orchestration lane**.
+
+## Requirements
+
+* Horizontal layout (default on desktop)
+* Scrollable / pannable if needed
+* Steps rendered as **cards/nodes in a sequence**
+* Smooth connector lines between steps
+* Responsive collapse/expand behavior
+
+## Each step card must show:
+
+Collapsed state:
+
+* step number
+* step name
+* role badge (Primary / Specialist)
+* small status indicator (idle for now)
+* small "inspect" icon/button
+
+Expanded / inspected state:
+
+* description
+* skills (chips)
+* tools (chips)
+* prompt (if available)
+* output definition (if present)
+* metadata (optional placeholder)
+
+## Interaction
+
+* Click step → open **Step Inspector**
+* Hover → highlight + subtle animation
+* Optional:
+
+  * "focus" button centers step
+  * keyboard navigation later-ready
+
+## Step Inspector (IMPORTANT)
+
+Implement as:
+
+* right drawer OR floating panel (modular component)
+
+Shows:
+
+* full step detail
+* skills/tools expanded
+* prompt text
+* output info
+* metadata (placeholder)
+* future trace/log hooks
+
+Must be reusable for:
+
+* Flow
+* Graph
+* future runtime
+
+---
+
+# 🧠 B. GRAPH VIEW (REAL IMPLEMENTATION)
+
+Replace placeholder graph with a real interactive graph.
+
+## Use:
+
+* react-force-graph OR equivalent
+
+## Graph structure
+
+Nodes:
+
+* agent(s)
+* steps
+* skills
+* tools
+* outputs
+
+Edges:
+
+* step → step (sequence)
+* step → skill/tool (usage)
+* step → output (result)
+
+## Behavior
+
+* force-directed layout (nodes drift slightly)
+* nodes repel and settle
+* edges animate subtly (pulse/fade)
+* nodes glow lightly
+
+## Interaction
+
+* hover → highlight node + connected edges
+* click:
+
+  * step → open Step Inspector
+  * agent → open agent detail (placeholder)
+  * skill/tool → show detail (placeholder panel)
+
+## Visual rules
+
+* agent nodes visually distinct
+* step nodes central
+* skills/tools branch outward
+* outputs downstream
+
+## IMPORTANT
+
+This graph must represent:
+
+```text
+Instance-only structure
+```
+
+NOT:
+
+* full workspace
+* all agents globally
+
+---
+
+# 🌊 C. WORKSPACE SWARM (HOME + WORKSPACE)
+
+Add ambient agent swarm.
+
+## Location
+
+* Home (subtle background)
+* Workspace (more prominent)
+
+## Implementation
+
+Create:
+
+* AgentSwarm component (reusable)
+
+Use:
+
+* force-directed or lightweight simulation
+
+## Behavior
+
+* nodes drift slowly
+* light connection lines appear/disappear
+* subtle animation (alive but not distracting)
+
+## Data (mock for now)
+
+Each agent:
+
+* id
+* name
+* type
+* platform (openclaw, etc placeholder)
+* status (idle/active placeholder)
+
+## Interaction
+
+* hover → highlight
+* click → open Agent Drawer (placeholder)
+
+## IMPORTANT
+
+* MUST NOT interfere with UI interactions
+* MUST be layered behind content
+* MUST be toggleable (future-ready)
+
+---
+
+# 🧩 D. STUDIO IMPROVEMENTS
+
+## 1. Graph / Flow toggle
+
+* ensure toggle is clean and responsive
+* preserve state when switching views
+
+## 2. Runtime tab (placeholder upgrade)
+
+* show:
+
+  * execution status (idle/draft)
+  * placeholder timeline
+  * placeholder log stream
+
+## 3. Bottom console enhancement
+
+Improve structure of tabs:
+
+* Logs
+* Steps
+* Skills
+* Tools
+* Outputs
+* Meta
+* Trace
+
+Each should:
+
+* render meaningful placeholder structure
+* be ready for real runtime injection later
+
+---
+
+# 🧱 E. COMPONENT ARCHITECTURE (IMPORTANT)
+
+All new features must be modular.
+
+Create reusable components:
+
+* FlowStepCard
+* StepInspector
+* GraphCanvas
+* AgentSwarm
+* NodeInspector (future-ready)
+* ConsolePanel
+
+DO NOT:
+
+* embed logic directly into page files
+* tightly couple to current layout
+
+---
+
+# 🧭 F. VISUAL + UX RULES
+
+* dark mode first
+* subtle glow accents (GRACE violet/orange)
+* motion should feel:
+
+  * organic
+  * responsive
+  * not noisy
+* avoid heavy particle overload initially
+
+---
+
+# 🧪 G. NON-GOALS (DO NOT DO YET)
+
+* full execution engine
+* real-time streaming logs
+* full agent integration
+* skill/tool import backends
+* plugin system
+* workflow versioning system
+* routines/scheduling
+
+---
+
+# 🧩 H. FUTURE PREP (DO NOT SKIP)
+
+Structure code so future features plug in cleanly:
+
+* provider abstraction layer (OpenClaw → others)
+* Mission Control layer
+* chained workflows
+* routines/triggers
+* analytics/traces
+
+---
+
+# ✅ Deliverables
+
+1. Flow view is horizontal, interactive, expandable
+2. Step Inspector works and is reusable
+3. Graph view is real (force-based), not placeholder
+4. Graph interactions (hover/click) work
+5. Agent swarm exists on Home and Workspace
+6. Swarm is ambient and non-blocking
+7. Studio toggle between Graph/Flow works cleanly
+8. Bottom console improved and structured
+9. No regression in Phase 1–3 functionality
+10. Code remains modular and future-proof
+
+---
+
+# 📦 At the end
+
+Provide:
+
+1. summary of files created/changed
+2. explanation of Flow implementation
+3. explanation of Graph architecture and library used
+4. explanation of AgentSwarm implementation
+5. how Step Inspector is reused across views
+6. list of future-ready hooks for runtime integration
+7. any performance considerations or limitations
