@@ -1,7 +1,13 @@
 import { Link } from "@/lib/router";
-import { Settings, ArrowRight, Sliders, FlaskConical, Puzzle } from "lucide-react";
+import { Settings, ArrowRight, Sliders, FlaskConical, Puzzle, Palette } from "lucide-react";
 
 const SETTINGS_LINKS = [
+  {
+    to: "/grace/theme",
+    icon: <Palette size={18} />,
+    label: "Theme Manager",
+    description: "Choose an accent color palette for the interface",
+  },
   {
     to: "/instance/settings/general",
     icon: <Settings size={18} />,

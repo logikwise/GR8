@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { type ColorThemeId, DEFAULT_COLOR_THEME } from "../lib/colorThemes";
 
 type Theme = "light" | "dark";
 
@@ -14,9 +15,12 @@ interface ThemeContextValue {
   theme: Theme;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
+  colorTheme: ColorThemeId;
+  setColorTheme: (id: ColorThemeId) => void;
 }
 
 const THEME_STORAGE_KEY = "paperclip.theme";
+const COLOR_THEME_STORAGE_KEY = "grace.colorTheme";
 const DARK_THEME_COLOR = "#18181b";
 const LIGHT_THEME_COLOR = "#ffffff";
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
@@ -24,6 +28,16 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 function resolveThemeFromDocument(): Theme {
   if (typeof document === "undefined") return "dark";
   return document.documentElement.classList.contains("dark") ? "dark" : "light";
+}
+
+function resolveColorThemeFromStorage(): ColorThemeId {
+  try {
+    const stored = localStorage.getItem(COLOR_THEME_STORAGE_KEY);
+    if (stored) return stored as ColorThemeId;
+  } catch {
+    // ignore
+  }
+  return DEFAULT_COLOR_THEME;
 }
 
 function applyTheme(theme: Theme) {
@@ -38,8 +52,16 @@ function applyTheme(theme: Theme) {
   }
 }
 
+function applyColorTheme(id: ColorThemeId) {
+  if (typeof document === "undefined") return;
+  document.documentElement.setAttribute("data-color-theme", id);
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => resolveThemeFromDocument());
+  const [colorTheme, setColorThemeState] = useState<ColorThemeId>(() =>
+    resolveColorThemeFromStorage(),
+  );
 
   const setTheme = useCallback((nextTheme: Theme) => {
     setThemeState(nextTheme);
@@ -47,6 +69,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const toggleTheme = useCallback(() => {
     setThemeState((current) => (current === "dark" ? "light" : "dark"));
+  }, []);
+
+  const setColorTheme = useCallback((id: ColorThemeId) => {
+    setColorThemeState(id);
   }, []);
 
   useEffect(() => {
@@ -58,13 +84,24 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   }, [theme]);
 
+  useEffect(() => {
+    applyColorTheme(colorTheme);
+    try {
+      localStorage.setItem(COLOR_THEME_STORAGE_KEY, colorTheme);
+    } catch {
+      // ignore
+    }
+  }, [colorTheme]);
+
   const value = useMemo(
     () => ({
       theme,
       setTheme,
       toggleTheme,
+      colorTheme,
+      setColorTheme,
     }),
-    [theme, setTheme, toggleTheme],
+    [theme, setTheme, toggleTheme, colorTheme, setColorTheme],
   );
 
   return (

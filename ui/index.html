@@ -22,8 +22,10 @@
     <script>
       (() => {
         const key = "paperclip.theme";
+        const colorKey = "grace.colorTheme";
         const darkThemeColor = "#18181b";
         const lightThemeColor = "#ffffff";
+        const validColorThemes = ["violet","teal","crimson","ember","sage","solaris"];
         try {
           const stored = window.localStorage.getItem(key);
           const theme = stored === "light" || stored === "dark" ? stored : "dark";
@@ -33,6 +35,10 @@
           const themeColorMeta = document.querySelector('meta[name="theme-color"]');
           if (themeColorMeta) {
             themeColorMeta.setAttribute("content", isDark ? darkThemeColor : lightThemeColor);
+          }
+          const storedColor = window.localStorage.getItem(colorKey);
+          if (storedColor && validColorThemes.includes(storedColor)) {
+            document.documentElement.setAttribute("data-color-theme", storedColor);
           }
         } catch {
           document.documentElement.classList.add("dark");

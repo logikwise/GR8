@@ -133,6 +133,79 @@
   --sidebar-ring: oklch(0.439 0 0);
 }
 
+/* ── Color Theme Overrides ─────────────────────────────────── */
+/* violet (default) — no override needed, defined in :root / .dark */
+
+/* teal */
+:root[data-color-theme="teal"] {
+  --grace-accent: #0d9488;
+  --grace-accent-muted: #ccfbf1;
+  --grace-accent-foreground: #ffffff;
+}
+.dark[data-color-theme="teal"],
+[data-color-theme="teal"].dark,
+[data-color-theme="teal"] .dark {
+  --grace-accent: #66FCF1;
+  --grace-accent-muted: #0b1f1e;
+  --grace-accent-foreground: #000000;
+}
+
+/* crimson */
+:root[data-color-theme="crimson"] {
+  --grace-accent: #dc2626;
+  --grace-accent-muted: #fee2e2;
+  --grace-accent-foreground: #ffffff;
+}
+.dark[data-color-theme="crimson"],
+[data-color-theme="crimson"].dark,
+[data-color-theme="crimson"] .dark {
+  --grace-accent: #f87171;
+  --grace-accent-muted: #2c1111;
+  --grace-accent-foreground: #ffffff;
+}
+
+/* ember */
+:root[data-color-theme="ember"] {
+  --grace-accent: #ea580c;
+  --grace-accent-muted: #ffedd5;
+  --grace-accent-foreground: #ffffff;
+}
+.dark[data-color-theme="ember"],
+[data-color-theme="ember"].dark,
+[data-color-theme="ember"] .dark {
+  --grace-accent: #fb923c;
+  --grace-accent-muted: #1c0e05;
+  --grace-accent-foreground: #ffffff;
+}
+
+/* sage */
+:root[data-color-theme="sage"] {
+  --grace-accent: #838264;
+  --grace-accent-muted: #e6e3de;
+  --grace-accent-foreground: #ffffff;
+}
+.dark[data-color-theme="sage"],
+[data-color-theme="sage"].dark,
+[data-color-theme="sage"] .dark {
+  --grace-accent: #a1a79e;
+  --grace-accent-muted: #1a1e1a;
+  --grace-accent-foreground: #ffffff;
+}
+
+/* solaris */
+:root[data-color-theme="solaris"] {
+  --grace-accent: #116466;
+  --grace-accent-muted: #d1e8e2;
+  --grace-accent-foreground: #ffffff;
+}
+.dark[data-color-theme="solaris"],
+[data-color-theme="solaris"].dark,
+[data-color-theme="solaris"] .dark {
+  --grace-accent: #2c9e9e;
+  --grace-accent-muted: #0b1515;
+  --grace-accent-foreground: #ffffff;
+}
+
 @layer base {
   * {
     @apply border-border;
