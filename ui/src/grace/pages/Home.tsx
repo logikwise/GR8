@@ -1,6 +1,6 @@
 import { Link } from "@/lib/router";
 import {
-  Zap, Layers, BookOpen, Cpu, Wrench, FolderOpen, LibraryBig,
+  Zap, Box, Workflow, Cpu, Wrench, FolderOpen, LibraryBig,
   Kanban, LayoutDashboard, Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -15,8 +15,8 @@ interface QuickLink {
 }
 
 const QUICK_LINKS: QuickLink[] = [
-  { label: "Workflows",   description: "Browse and manage blueprint workflows",              to: "/grace/library",    icon: <BookOpen size={20} /> },
-  { label: "Instances",   description: "View and manage workflow instances",                 to: "/grace/instances",  icon: <Layers size={20} /> },
+  { label: "Blueprints",  description: "Browse and manage blueprint workflows",              to: "/grace/library",    icon: <Workflow size={20} /> },
+  { label: "Instances",   description: "View and manage workflow instances",                 to: "/grace/instances",  icon: <Box size={20} /> },
   { label: "Studio",      description: "Build and observe agent workflows",                  to: "/grace/studio",     icon: <Cpu size={20} /> },
   { label: "Skills",      description: "Manage agent skills and capabilities",               to: "/grace/skills",     icon: <Zap size={20} /> },
   { label: "Tools",       description: "Configure tools available to agents",                to: "/grace/tools",      icon: <Wrench size={20} /> },

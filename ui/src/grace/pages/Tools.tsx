@@ -61,8 +61,8 @@ function ToolCard({
         </button>
       </div>
       <div className="flex items-start gap-3 pr-14">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/30">
-          <Wrench size={14} className="text-muted-foreground" />
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10">
+          <Wrench size={14} className="text-emerald-400" />
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -96,7 +96,7 @@ function ToolRow({
 }: { tool: ToolDefinition; onDelete: () => void; onDuplicate: () => void }) {
   return (
     <div className="group flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-2.5 hover:border-[var(--grace-accent)]/40 transition-colors">
-      <Wrench size={13} className="text-muted-foreground/50 shrink-0" />
+      <Wrench size={13} className="text-emerald-400/70 shrink-0" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold truncate">{tool.name}</span>

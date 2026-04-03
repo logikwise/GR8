@@ -25,7 +25,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "@/lib/router";
 import {
-  Cpu, ArrowLeft, AlertCircle, Layers, FileText, Zap, Wrench,
+  Cpu, ArrowLeft, AlertCircle, Box, FileText, Zap, Wrench,
   CircleDot, ChevronDown, ChevronUp, Terminal, ListChecks,
   MessageSquare, PenLine, PanelLeft, BarChart3, GitBranch,
   Info, ChevronRight, Tag, Calendar, Hash, Clock, PlayCircle,
@@ -328,7 +328,7 @@ function StudioHeader({
         {mode === "blueprint" && (
           <button type="button" onClick={onCreateInstance}
             className="flex items-center gap-1.5 rounded border border-[var(--grace-accent)] bg-[var(--grace-accent)] px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90">
-            <Layers size={12} />Create Instance
+            <Box size={12} />Create Instance
           </button>
         )}
 

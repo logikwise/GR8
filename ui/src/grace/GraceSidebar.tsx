@@ -11,9 +11,9 @@ import { useNavigate } from "@/lib/router";
 import {
   Home,
   LayoutDashboard,
-  BookOpen,
+  Workflow,
   Cpu,
-  Layers,
+  Box,
   Wrench,
   FileOutput,
   Settings,
@@ -42,25 +42,27 @@ interface GraceNavItem {
   label: string;
   to: string;
   icon: React.ReactNode;
+  /** Tailwind color class applied to the icon when the link is inactive */
+  iconColor?: string;
 }
 
 const PRIMARY_NAV: GraceNavItem[] = [
-  { label: "Home",       to: "/grace/home",       icon: <Home size={16} /> },
-  { label: "Dashboard",  to: "/grace/dashboard",  icon: <LayoutDashboard size={16} /> },
-  { label: "Workflows",  to: "/grace/library",    icon: <BookOpen size={16} /> },
-  { label: "Studio",     to: "/grace/studio",     icon: <Cpu size={16} /> },
-  { label: "Instances",  to: "/grace/instances",  icon: <Layers size={16} /> },
-  { label: "Skills",     to: "/grace/skills",     icon: <Zap size={16} /> },
-  { label: "Tools",      to: "/grace/tools",      icon: <Wrench size={16} /> },
-  { label: "Outputs",    to: "/grace/outputs",    icon: <FileOutput size={16} /> },
-  { label: "Library",    to: "/grace/knowledge",  icon: <LibraryBig size={16} /> },
-  { label: "Org",        to: "/grace/org",        icon: <Users size={16} /> },
+  { label: "Home",        to: "/grace/home",       icon: <Home size={16} />,         iconColor: "text-slate-400" },
+  { label: "Dashboard",   to: "/grace/dashboard",  icon: <LayoutDashboard size={16} />, iconColor: "text-sky-400" },
+  { label: "Blueprints",  to: "/grace/library",    icon: <Workflow size={16} />,      iconColor: "text-violet-400" },
+  { label: "Studio",      to: "/grace/studio",     icon: <Cpu size={16} />,           iconColor: "text-cyan-400" },
+  { label: "Instances",   to: "/grace/instances",  icon: <Box size={16} />,           iconColor: "text-indigo-400" },
+  { label: "Skills",      to: "/grace/skills",     icon: <Zap size={16} />,           iconColor: "text-amber-400" },
+  { label: "Tools",       to: "/grace/tools",      icon: <Wrench size={16} />,        iconColor: "text-emerald-400" },
+  { label: "Outputs",     to: "/grace/outputs",    icon: <FileOutput size={16} />,    iconColor: "text-orange-400" },
+  { label: "Library",     to: "/grace/knowledge",  icon: <LibraryBig size={16} />,    iconColor: "text-purple-400" },
+  { label: "Org",         to: "/grace/org",        icon: <Users size={16} />,         iconColor: "text-rose-400" },
 ];
 
 const BOTTOM_NAV: GraceNavItem[] = [
-  { label: "Connections", to: "/grace/connections", icon: <Plug size={16} /> },
+  { label: "Connections", to: "/grace/connections", icon: <Plug size={16} />,       iconColor: "text-pink-400" },
   { label: "Settings",    to: "/grace/settings",    icon: <Settings size={16} /> },
-  { label: "Admin",       to: "/grace/admin",       icon: <ShieldCheck size={16} /> },
+  { label: "Admin",       to: "/grace/admin",       icon: <ShieldCheck size={16} />, iconColor: "text-red-400" },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -88,7 +90,7 @@ function GraceNavLink({ item, collapsed }: { item: GraceNavItem; collapsed: bool
   return (
     <NavLink
       to={item.to}
-      title={collapsed ? item.label : undefined}
+      title={item.label}
       className={({ isActive }) =>
         cn(
           "flex items-center rounded transition-colors",
@@ -101,8 +103,14 @@ function GraceNavLink({ item, collapsed }: { item: GraceNavItem; collapsed: bool
         )
       }
     >
-      <span className="shrink-0">{item.icon}</span>
-      {!collapsed && <span className="truncate">{item.label}</span>}
+      {({ isActive }) => (
+        <>
+          <span className={cn("shrink-0", !isActive && item.iconColor)}>
+            {item.icon}
+          </span>
+          {!collapsed && <span className="truncate">{item.label}</span>}
+        </>
+      )}
     </NavLink>
   );
 }

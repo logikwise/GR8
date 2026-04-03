@@ -14,7 +14,7 @@
  */
 
 import { useState, useMemo, useRef } from "react";
-import { BookOpen, Plus, Upload, FileJson, Link as LinkIcon, AlertCircle, Trash2 } from "lucide-react";
+import { Workflow, Plus, Upload, FileJson, Link as LinkIcon, AlertCircle, Trash2 } from "lucide-react";
 import { useNavigate } from "@/lib/router";
 import { blueprintService } from "../blueprints/blueprintService";
 import { BlueprintCard } from "../components/BlueprintCard";
@@ -280,7 +280,7 @@ export function GraceWorkflowLibrary() {
       {/* Empty state */}
       {filtered.length === 0 && allBlueprints.length === 0 && (
         <div className="rounded-lg border border-dashed border-border bg-card/50 p-12 text-center">
-          <BookOpen size={32} className="mx-auto mb-3 text-muted-foreground/40" />
+          <Workflow size={32} className="mx-auto mb-3 text-muted-foreground/40" />
           <p className="text-sm font-medium text-muted-foreground">No workflows yet</p>
           <p className="mt-1 text-xs text-muted-foreground/70">Create a new workflow or import a Blueprint to get started.</p>
           <div className="mt-4 flex items-center justify-center gap-2">

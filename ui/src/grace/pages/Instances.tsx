@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useMemo } from "react";
-import { Layers, ArrowRight, Clock, CircleDot, Trash2 } from "lucide-react";
+import { Box, ArrowRight, Clock, CircleDot, Trash2 } from "lucide-react";
 import { useNavigate } from "@/lib/router";
 import { instanceService } from "../instances/instanceService";
 import { InstanceCard } from "../components/InstanceCard";
@@ -152,7 +152,7 @@ export function GraceInstances() {
 
       {allInstances.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-card/50 p-12 text-center">
-          <Layers size={32} className="mx-auto mb-3 text-muted-foreground/40" />
+          <Box size={32} className="mx-auto mb-3 text-muted-foreground/40" />
           <p className="text-sm font-medium text-muted-foreground">No instances yet</p>
           <p className="mt-1 text-xs text-muted-foreground/70 max-w-sm mx-auto">
             Open a Blueprint from Workflows and click "Create Instance" to get started.
