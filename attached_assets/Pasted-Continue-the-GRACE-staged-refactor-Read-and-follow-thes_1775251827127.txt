@@ -1,0 +1,361 @@
+Continue the GRACE staged refactor. Read and follow these files first:
+
+* docs/product-model.md
+* docs/architecture-plan.md
+* docs/studio-spec.md
+* docs/replit-guardrails.md
+
+This is Phase 8.
+
+Primary objectives:
+
+1. Make simple real instance testing possible using OpenClaw-first runtime activation
+2. Add an Inputs / Files surface so users can attach assets to an instance/run outside of chat
+3. Improve outputs/chat usability by supporting artifact/link unfurling and better output visibility
+4. Inventory remaining legacy/base-system functionality so we decide deliberately what to migrate, preserve, defer, or retire
+5. Preserve inbox/task routing concepts for later Mission Control / Recursion reuse rather than deleting or burying them
+
+Do NOT remove backend/runtime/orchestration/adapters.
+Do NOT begin the full org/workspace tenancy refactor yet.
+Do NOT fake provider capabilities that are not actually supported.
+Do NOT overbuild scheduling, billing, or full Mission Control in this pass.
+
+## Primary success criteria
+
+By the end of this phase:
+
+* a simple real instance can be run or at least dispatched through the real OpenClaw path
+* runtime state can be observed truthfully enough to validate the loop
+* users can add files/assets to an instance/run outside of chat
+* chat can unfurl useful returned outputs/links/artifacts
+* the team has a documented inventory of legacy functionality and a migration classification for each major capability
+* inbox/task/routing features are preserved as future MC/Recursion building blocks, not accidentally buried
+
+## Critical product rules
+
+* Blueprint cannot run directly
+* Only Instances can run
+* Studio remains instance-centric
+* Studio graph and flow remain instance-contained
+* Workspace swarm remains outside Studio
+* Provider health, run dispatch, event polling/streaming, chat interaction, agent discovery, and output listing are separate capabilities
+* No core user-managed GRACE asset may exist only in module memory
+* Legacy/base functionality must be inventoried and classified, not merely hidden
+
+## A. Runtime activation for simple real instance testing
+
+This is the main functional focus of the phase.
+
+Goal:
+Make it possible to test simple real instances end-to-end against OpenClaw as the first provider.
+
+Requirements:
+
+1. Use preserved backend/runtime/adapter code first, especially:
+
+   * packages/adapters/openclaw-gateway
+   * preserved runtime services
+   * existing run/session/event plumbing
+2. Add the minimum viable server/UI integration needed for real run initiation beyond health/probe
+3. Support a simple test path:
+
+   * choose a simple existing workflow
+   * create an instance
+   * bind a provider/agent where possible
+   * click Run
+   * see truthful state/log/output updates
+
+This does NOT need to be the final enterprise runtime path, but it must move beyond UI-only local simulation.
+
+### A1. Real run initiation
+
+* wire real or semi-real OpenClaw run initiation through preserved code
+* capture runtime ids if available
+* persist them in RunRecord
+* reflect lifecycle in Studio and instance status
+
+### A2. Runtime polling preferred over overbuilding streaming
+
+If streaming is not straightforward in this phase, prefer a clean polling loop over a fake event stream.
+
+Requirements:
+
+* poll run state/events on an interval if supported
+* update:
+
+  * runtime status
+  * step status
+  * logs/events
+  * outputs if available
+* clearly distinguish:
+
+  * real provider-backed events
+  * inferred/local fallback state
+  * unavailable capability
+
+### A3. Truthful runtime surfaces
+
+Wire real or semi-real runtime data into:
+
+* Runtime tab
+* Logs tab
+* Steps tab
+* Outputs tab
+* Meta tab
+* Trace tab
+
+Do not pretend data is provider-backed when it is not.
+
+## B. Inputs / Files surface
+
+Add a new Studio-adjacent or instance-adjacent input surface for user-provided assets.
+
+This is important because users may need to provide:
+
+* files
+* reference docs
+* images
+* pasted links
+* other input assets
+
+This does NOT need to be inside the chat itself.
+
+### B1. New surface
+
+Add a new tab/surface, likely one of:
+
+* Inputs
+* Files
+* Inputs / Files
+
+This can live:
+
+* in the bottom console
+* or as a right-side tab/panel
+* or as an instance-level companion panel
+
+Pick the cleanest current fit without breaking Studio.
+
+### B2. Supported behaviors for this phase
+
+Implement a clean scaffold for:
+
+* drag/drop upload UI
+* file picker UI
+* pasted link entry
+* simple asset list
+
+If full backend upload/storage is not yet available:
+
+* persist asset metadata records via a service layer
+* allow local file reference placeholders
+* clearly mark where backend/file storage integration is deferred
+
+### B3. Asset model
+
+Create a persistent asset/input record model with fields like:
+
+* id
+* instanceId
+* runId? optional
+* name
+* type
+* sourceType (upload | link | pasted | generated)
+* mimeType?
+* path/url/reference
+* createdAt
+* metadata
+
+This asset model must be persisted through a service layer, not in memory only.
+
+### B4. Agent usability
+
+The UI should make it clear that:
+
+* assets were attached to the instance/run
+* the agent can reference them by id/path/link later
+* users can see what inputs are available
+
+Do not overpromise perfect OpenClaw pickup behavior if that is not wired yet.
+
+## C. Output unfurling and better runtime output usability
+
+Even if OpenClaw chat/media transport is limited, GRACE can still make outputs usable.
+
+### C1. Chat unfurl support
+
+Improve the chat/runtime message renderer so that if a runtime message includes:
+
+* links
+* artifact ids
+* file references
+* output records
+* image file paths/urls
+
+the UI can:
+
+* render an artifact card
+* render a link preview
+* render an image preview if safe/available
+* provide “open in Library” or “locate output” action
+
+Do not fake raw image transport through provider chat if it does not exist.
+Do add the UI logic to unfurl references that the runtime returns.
+
+### C2. Output cards
+
+Add a reusable output/artifact card component for use in:
+
+* chat panel
+* Outputs tab
+* Library
+
+It should support:
+
+* title
+* type
+* provider/source
+* link/path
+* metadata
+* open/locate action
+
+### C3. Library hookup
+
+If runtime outputs are returned, persist them into Library/output records so users can revisit them after refresh.
+
+## D. Legacy/base-system capability inventory
+
+Do not just keep hiding old Paperclip/base functionality.
+Inventory it.
+
+Create a documented audit of major legacy/base-system capabilities and classify them.
+
+### D1. Create a repo doc
+
+Add a document such as:
+
+* docs/legacy-capability-inventory.md
+
+### D2. Inventory categories
+
+Review visible or important base functionality such as:
+
+* inbox
+* tasks
+* task routing
+* comments/discussions
+* approvals
+* heartbeats
+* routines-related structures if present
+* org/reporting concepts
+* plugin surfaces
+* experimental/system settings
+* notifications or queues if present
+
+### D3. Classification
+
+For each major capability, classify it as one of:
+
+* migrate into GRACE soon
+* preserve for future Mission Control / Recursion reuse
+* wrap and defer
+* retire
+* unclear / needs more investigation
+
+### D4. Explicit preservation note
+
+Inbox and task routing features should be treated as future MC/Recursion building blocks unless clearly incompatible.
+Do not remove or bury them casually.
+
+## E. GRACE shell cleanup for remaining base-system bleed-through
+
+Continue to reduce legacy bleed-through.
+
+Requirements:
+
+* identify remaining header/user/settings links that still point to base UI
+* move visible GRACE user/profile/settings navigation into GRACE routes or clearly disable/wrap them
+* if user icon/menu still points incorrectly, fix it
+* visible GRACE navigation must stay inside GRACE unless explicitly marked otherwise
+
+## F. Lightweight Studio cleanup only
+
+Keep this light.
+
+Requirements:
+
+* preserve calm graph behavior
+* improve centering where low-risk
+* keep moving toward agent-as-node structure
+* do not do a major graph library rewrite in this phase unless required for runtime activation
+* preserve inspector reuse
+* do not spend the phase polishing visuals at the expense of runtime testing
+
+## G. Skill / Tool / Workflow persistence sanity
+
+Quick sanity pass only:
+
+* confirm all create/duplicate/edit/delete flows persist
+* confirm refresh/deep-link stability
+* do not redesign them again in this phase unless necessary
+
+## H. Non-goals
+
+Do NOT fully implement:
+
+* full org/workspace tenancy refactor
+* budgets/approvals enforcement
+* billing/invoicing
+* full multi-provider support beyond OpenClaw-first architecture
+* routines/scheduling execution
+* full Mission Control portfolio layer
+* full file storage backend if it is too large for this pass
+* perfect media transport through provider chat if provider does not support it
+
+## Deliverables
+
+1. Simple real instance testing is possible or meaningfully closer with true OpenClaw-backed run initiation
+2. Runtime polling/event ingestion is more truthful
+3. Studio can show real or semi-real runtime progress
+4. Inputs / Files surface exists with persistent asset records
+5. Chat can unfurl output references/artifacts/links where appropriate
+6. Library receives real or semi-real outputs where available
+7. Legacy capability inventory doc exists and classifies major base-system features
+8. Inbox/task routing is explicitly preserved for future MC/Recursion reuse
+9. Remaining visible base-system bleed-through in GRACE navigation is reduced
+10. App still boots and persistence rules remain intact
+
+## Final self-audit (REQUIRED)
+
+At the end, provide a strict expectation audit with:
+
+* 👍 = meets expectation
+* ⚠️ = partial / caveated
+* ❌ = not yet met
+
+Audit categories:
+
+* [ ] Simple real instance testing readiness
+* [ ] OpenClaw run initiation progress
+* [ ] Runtime polling/event truthfulness
+* [ ] Chat capability honesty
+* [ ] Output unfurling usability
+* [ ] Inputs / Files surface
+* [ ] Library/output persistence
+* [ ] GRACE shell navigation integrity
+* [ ] User/profile/settings link cleanup
+* [ ] Legacy capability inventory completeness
+* [ ] Inbox/task routing preservation
+* [ ] No in-memory-only core asset storage
+* [ ] Provider-agnostic architecture preserved
+
+Also include:
+
+1. summary of files created/changed
+2. explanation of what is now sufficient to test a simple real instance
+3. explanation of what OpenClaw capabilities are now truly live vs still partial
+4. explanation of how Inputs / Files records are stored
+5. explanation of how output unfurling works
+6. explanation of remaining routing/base-system bleed-through, if any
+7. explanation of the legacy capability inventory classification
+8. deferred items for the next phase
