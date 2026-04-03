@@ -4,7 +4,7 @@
  * onManage is ONLY passed from the Workflows/library context — never from Studio.
  */
 
-import { ArrowRight, Layers, Users, Zap, Settings2 } from "lucide-react";
+import { ArrowRight, Workflow, GitBranch, Users, Zap, Settings2 } from "lucide-react";
 import type { Blueprint } from "../blueprints/blueprintTypes";
 import { IdBadge } from "./IdBadge";
 import { cn } from "@/lib/utils";
@@ -34,9 +34,9 @@ export function BlueprintCard({ blueprint, onOpen, onManage, viewMode = "card", 
         "flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-2.5 transition-colors hover:border-[var(--grace-accent)]/40 hover:bg-card/80",
         className
       )}>
-        <span className="text-[10px] font-medium uppercase tracking-wide rounded border border-[var(--grace-accent)]/30 bg-[var(--grace-accent-muted)] text-[var(--grace-accent)] px-1.5 py-0.5 shrink-0">
-          Blueprint
-        </span>
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-violet-500/30 bg-violet-500/10">
+          <Workflow size={12} className="text-violet-400" />
+        </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold truncate">{blueprint.name}</span>
@@ -48,7 +48,7 @@ export function BlueprintCard({ blueprint, onOpen, onManage, viewMode = "card", 
         </div>
         <div className="hidden sm:flex items-center gap-3 text-xs text-muted-foreground shrink-0">
           <span className="flex items-center gap-1">
-            <Layers size={11} />{stepCount} steps
+            <GitBranch size={11} />{stepCount} steps
           </span>
           <span className="flex items-center gap-1">
             {hasSpecialists ? <Users size={11} /> : <Zap size={11} />}
@@ -86,24 +86,24 @@ export function BlueprintCard({ blueprint, onOpen, onManage, viewMode = "card", 
       "group flex flex-col gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:border-[var(--grace-accent)]/40 hover:bg-card/80",
       className
     )}>
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-violet-500/30 bg-violet-500/10">
+          <Workflow size={15} className="text-violet-400" />
+        </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] font-medium uppercase tracking-wide rounded border border-[var(--grace-accent)]/30 bg-[var(--grace-accent-muted)] text-[var(--grace-accent)] px-1.5 py-0.5">
-              Blueprint
-            </span>
+            <h3 className="text-sm font-semibold text-foreground leading-tight">{blueprint.name}</h3>
             {blueprint.ui?.category && (
-              <span className="text-[10px] text-muted-foreground/70">{blueprint.ui.category}</span>
+              <span className="text-[10px] text-muted-foreground/60 shrink-0">{blueprint.ui.category}</span>
             )}
           </div>
-          <h3 className="mt-1.5 text-sm font-semibold text-foreground leading-tight">{blueprint.name}</h3>
           <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{blueprint.description}</p>
         </div>
       </div>
 
       <div className="flex items-center gap-3 text-xs text-muted-foreground">
         <span className="flex items-center gap-1">
-          <Layers size={11} />
+          <GitBranch size={11} />
           {stepCount} {stepCount === 1 ? "step" : "steps"}
         </span>
         <span className="flex items-center gap-1">

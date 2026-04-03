@@ -49,7 +49,7 @@ interface GraceNavItem {
 const PRIMARY_NAV: GraceNavItem[] = [
   { label: "Home",        to: "/grace/home",       icon: <Home size={16} />,         iconColor: "text-slate-400" },
   { label: "Dashboard",   to: "/grace/dashboard",  icon: <LayoutDashboard size={16} />, iconColor: "text-sky-400" },
-  { label: "Blueprints",  to: "/grace/library",    icon: <Workflow size={16} />,      iconColor: "text-violet-400" },
+  { label: "Workflows",   to: "/grace/library",    icon: <Workflow size={16} />,      iconColor: "text-violet-400" },
   { label: "Studio",      to: "/grace/studio",     icon: <Cpu size={16} />,           iconColor: "text-cyan-400" },
   { label: "Instances",   to: "/grace/instances",  icon: <Box size={16} />,           iconColor: "text-indigo-400" },
   { label: "Skills",      to: "/grace/skills",     icon: <Zap size={16} />,           iconColor: "text-amber-400" },

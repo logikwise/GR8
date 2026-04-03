@@ -148,7 +148,7 @@ export function GraceDashboard() {
           {[
             { to: "/grace/instances", label: "Instances",   icon: <Box size={14} />,       description: "View all instances" },
             { to: "/grace/studio",    label: "Studio",     icon: <Cpu size={14} />,       description: "Open Studio" },
-            { to: "/grace/library",   label: "Blueprints", icon: <Workflow size={14} />,  description: "Browse blueprints" },
+            { to: "/grace/library",   label: "Workflows",  icon: <Workflow size={14} />,  description: "Browse blueprints" },
             { to: "/grace/skills",    label: "Skills",     icon: <Zap size={14} />,       description: "Manage skills" },
             { to: "/grace/tools",     label: "Tools",      icon: <Wrench size={14} />,    description: "Manage tools" },
             { to: "/grace/outputs",   label: "Outputs",    icon: <TrendingUp size={14} />, description: "Review artifacts" },
