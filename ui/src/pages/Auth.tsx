@@ -4,8 +4,7 @@ import { useNavigate, useSearchParams } from "@/lib/router";
 import { authApi } from "../api/auth";
 import { queryKeys } from "../lib/queryKeys";
 import { Button } from "@/components/ui/button";
-import { AsciiArtAnimation } from "@/components/AsciiArtAnimation";
-import { Sparkles } from "lucide-react";
+import { GraceAnimation } from "@/components/GraceAnimation";
 
 type AuthMode = "sign_in" | "sign_up";
 
@@ -62,7 +61,7 @@ export function AuthPage() {
 
   if (isSessionLoading) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center">
+      <div className="fixed inset-0 flex items-center justify-center bg-background">
         <p className="text-sm text-muted-foreground">Loading…</p>
       </div>
     );
@@ -73,24 +72,35 @@ export function AuthPage() {
       {/* Left half — form */}
       <div className="w-full md:w-1/2 flex flex-col overflow-y-auto">
         <div className="w-full max-w-md mx-auto my-auto px-8 py-12">
-          <div className="flex items-center gap-2 mb-8">
-            <div className="flex h-6 w-6 items-center justify-center rounded bg-[var(--grace-accent)] text-white text-xs font-bold">
-              G
+
+          {/* Logo mark */}
+          <div className="mb-10">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--grace-accent)] text-white text-base font-bold shadow-lg shadow-[var(--grace-accent)]/30">
+                G
+              </div>
+              <div>
+                <div className="text-xs font-semibold tracking-[0.25em] text-[var(--grace-accent)] uppercase">
+                  G.R.A.C.E.
+                </div>
+                <div className="text-[10px] tracking-widest text-muted-foreground uppercase">
+                  by Kodavara
+                </div>
+              </div>
             </div>
-            <span className="text-sm font-semibold tracking-wide">GRACE</span>
           </div>
 
-          <h1 className="text-xl font-semibold">
-            {mode === "sign_in" ? "Sign in to GRACE" : "Create your GRACE account"}
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {mode === "sign_in" ? "Welcome back" : "Create your account"}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1.5 text-sm text-muted-foreground">
             {mode === "sign_in"
-              ? "Use your email and password to access this instance."
-              : "Create an account for this instance. Email confirmation is not required in v1."}
+              ? "Sign in to access Kodavara GRACE."
+              : "Create an account to access this instance."}
           </p>
 
           <form
-            className="mt-6 space-y-4"
+            className="mt-7 space-y-4"
             method="post"
             action={mode === "sign_up" ? "/api/auth/sign-up/email" : "/api/auth/sign-in/email"}
             onSubmit={(event) => {
@@ -105,49 +115,64 @@ export function AuthPage() {
           >
             {mode === "sign_up" && (
               <div>
-                <label htmlFor="name" className="text-xs text-muted-foreground mb-1 block">Name</label>
+                <label htmlFor="name" className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                  Full name
+                </label>
                 <input
                   id="name"
                   name="name"
-                  className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
+                  className="w-full rounded-md border border-border bg-transparent px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-[var(--grace-accent)] focus:border-[var(--grace-accent)] placeholder:text-muted-foreground/50 transition-colors"
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   autoComplete="name"
                   autoFocus
+                  placeholder="Your name"
                 />
               </div>
             )}
             <div>
-              <label htmlFor="email" className="text-xs text-muted-foreground mb-1 block">Email</label>
+              <label htmlFor="email" className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                Email
+              </label>
               <input
                 id="email"
                 name="email"
-                className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
+                className="w-full rounded-md border border-border bg-transparent px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-[var(--grace-accent)] focus:border-[var(--grace-accent)] placeholder:text-muted-foreground/50 transition-colors"
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 autoComplete="email"
                 autoFocus={mode === "sign_in"}
+                placeholder="you@example.com"
               />
             </div>
             <div>
-              <label htmlFor="password" className="text-xs text-muted-foreground mb-1 block">Password</label>
+              <label htmlFor="password" className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                Password
+              </label>
               <input
                 id="password"
                 name="password"
-                className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
+                className="w-full rounded-md border border-border bg-transparent px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-[var(--grace-accent)] focus:border-[var(--grace-accent)] placeholder:text-muted-foreground/50 transition-colors"
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete={mode === "sign_in" ? "current-password" : "new-password"}
+                placeholder={mode === "sign_up" ? "Min. 8 characters" : "••••••••"}
               />
             </div>
-            {error && <p className="text-xs text-destructive">{error}</p>}
+
+            {error && (
+              <p className="text-xs text-destructive bg-destructive/10 rounded px-3 py-2">{error}</p>
+            )}
+
             <Button
               type="submit"
               disabled={mutation.isPending}
               aria-disabled={!canSubmit || mutation.isPending}
-              className={`w-full ${!canSubmit && !mutation.isPending ? "opacity-50" : ""}`}
+              className={`w-full mt-1 bg-[var(--grace-accent)] hover:bg-[var(--grace-accent)]/90 text-white ${
+                !canSubmit && !mutation.isPending ? "opacity-50" : ""
+              }`}
             >
               {mutation.isPending
                 ? "Working…"
@@ -157,11 +182,11 @@ export function AuthPage() {
             </Button>
           </form>
 
-          <div className="mt-5 text-sm text-muted-foreground">
-            {mode === "sign_in" ? "Need an account?" : "Already have an account?"}{" "}
+          <div className="mt-6 text-sm text-muted-foreground">
+            {mode === "sign_in" ? "Don't have an account?" : "Already have an account?"}{" "}
             <button
               type="button"
-              className="font-medium text-foreground underline underline-offset-2"
+              className="font-medium text-[var(--grace-accent)] hover:underline underline-offset-2 transition-colors"
               onClick={() => {
                 setError(null);
                 setMode(mode === "sign_in" ? "sign_up" : "sign_in");
@@ -170,12 +195,25 @@ export function AuthPage() {
               {mode === "sign_in" ? "Create one" : "Sign in"}
             </button>
           </div>
+
+          <div className="mt-12 text-[10px] text-muted-foreground/40 tracking-widest uppercase">
+            Kodavara GRACE — Agent Orchestration Platform
+          </div>
         </div>
       </div>
 
-      {/* Right half — ASCII art animation (hidden on mobile) */}
-      <div className="hidden md:block w-1/2 overflow-hidden">
-        <AsciiArtAnimation />
+      {/* Right half — GRACE animation */}
+      <div className="hidden md:block w-1/2 overflow-hidden relative bg-black/20">
+        <GraceAnimation />
+        {/* Overlay label */}
+        <div className="absolute bottom-8 left-0 right-0 flex flex-col items-center gap-1 pointer-events-none">
+          <div className="text-[10px] font-semibold tracking-[0.4em] text-[var(--grace-accent)]/60 uppercase">
+            G.R.A.C.E.
+          </div>
+          <div className="text-[9px] tracking-[0.25em] text-muted-foreground/30 uppercase">
+            Generative Runtime Agent Coordination Engine
+          </div>
+        </div>
       </div>
     </div>
   );
