@@ -6,13 +6,15 @@
  */
 
 import { useState, useEffect, useMemo } from "react";
-import { Box, ArrowRight, Clock, CircleDot, Trash2 } from "lucide-react";
+import { Box, ArrowRight, Clock, CircleDot, Trash2, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { useNavigate } from "@/lib/router";
 import { instanceService } from "../instances/instanceService";
+import { runService } from "../providers/runService";
 import { InstanceCard } from "../components/InstanceCard";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { SearchFilterBar, type FilterDef, type SortOption } from "../components/SearchFilterBar";
 import type { Instance, InstanceStatus } from "../instances/instanceTypes";
+import type { RunStatus } from "../providers/providerTypes";
 import { cn } from "@/lib/utils";
 
 const STATUS_COLORS: Record<InstanceStatus, string> = {
@@ -30,6 +32,27 @@ function formatDate(iso: string) {
   catch { return iso; }
 }
 
+function timeAgo(iso: string): string {
+  try {
+    const diff = Date.now() - new Date(iso).getTime();
+    if (diff < 0) return "just now";
+    const secs = Math.floor(diff / 1000);
+    if (secs < 60) return `${secs}s ago`;
+    const mins = Math.floor(secs / 60);
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return formatDate(iso);
+  } catch { return iso; }
+}
+
+const RUN_STATUS_ROW: Partial<Record<RunStatus, { icon: React.ReactNode; color: string; label: string }>> = {
+  completed: { icon: <CheckCircle2 size={10} />, color: "text-blue-400",            label: "done" },
+  failed:    { icon: <XCircle      size={10} />, color: "text-red-400",             label: "failed" },
+  cancelled: { icon: <XCircle      size={10} />, color: "text-muted-foreground/50", label: "cancelled" },
+  running:   { icon: <Loader2      size={10} className="animate-spin" />, color: "text-emerald-400", label: "running" },
+};
+
 function InstanceRow({
   instance, onOpen, onDelete,
 }: {
@@ -38,6 +61,10 @@ function InstanceRow({
   onDelete: (i: Instance) => void;
 }) {
   const statusColor = STATUS_COLORS[instance.status] ?? STATUS_COLORS.draft;
+  const latestRun = runService.getLatestRun(instance.id);
+  const runCfg = latestRun ? RUN_STATUS_ROW[latestRun.status] : null;
+  const runTimestamp = latestRun?.completedAt ?? latestRun?.startedAt ?? null;
+
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-2.5 transition-colors hover:border-[var(--grace-accent)]/40 hover:bg-card/80 group">
       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-indigo-500/30 bg-indigo-500/10">
@@ -53,8 +80,26 @@ function InstanceRow({
         <div className="text-xs text-muted-foreground truncate">from {instance.blueprintName}</div>
       </div>
       <div className="hidden sm:flex items-center gap-3 text-xs text-muted-foreground shrink-0">
-        <span className="flex items-center gap-1"><CircleDot size={11} />{instance.graphSnapshot.length} steps</span>
-        <span className="flex items-center gap-1"><Clock size={11} />{formatDate(instance.createdAt)}</span>
+        <span className="flex items-center gap-1">
+          <CircleDot size={11} />
+          {instance.graphSnapshot.length} steps
+        </span>
+        {latestRun && runCfg ? (
+          <span className="flex items-center gap-1.5">
+            <span className={cn("flex items-center gap-1", runCfg.color)}>
+              {runCfg.icon}
+              {runCfg.label}
+            </span>
+            <span className="text-muted-foreground/40">·</span>
+            <Clock size={10} />
+            <span>{runTimestamp ? timeAgo(runTimestamp) : formatDate(instance.createdAt)}</span>
+          </span>
+        ) : (
+          <span className="flex items-center gap-1">
+            <Clock size={11} />
+            {formatDate(instance.createdAt)}
+          </span>
+        )}
       </div>
       <button type="button" onClick={() => onDelete(instance)}
         className="flex items-center justify-center w-7 h-7 rounded text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
