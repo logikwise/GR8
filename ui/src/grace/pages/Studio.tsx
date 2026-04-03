@@ -1,5 +1,5 @@
 /**
- * Studio — Phase 4
+ * Studio — Phase 5
  *
  * Layout:
  *   ┌────────────────────────────────────────────────────────────────┐
@@ -7,36 +7,40 @@
  *   ├───────────────┬──────────────────────────────────┬─────────────┤
  *   │  Left panel   │   Center canvas                  │  Right chat │
  *   │  (toggleable) │   Graph ← or → Flow ← or → Rt   │  panel      │
- *   │  ~210px       │   + StepInspector drawer (right) │  240px      │
+ *   │  ~210px       │   + StepInspector drawer (right) │  resizable  │
  *   ├───────────────┴──────────────────────────────────┴─────────────┤
  *   │  Bottom console: Logs|Steps|Skills|Tools|Outputs|Meta|Trace    │
  *   └────────────────────────────────────────────────────────────────┘
  *
- * Blueprint mode: read-only. "Create Instance" is the only CTA.
- * Instance mode: configuration + interactive canvas.
- *
- * Phase 4 additions:
- *   - FlowView: horizontal interactive lane (FlowStepCard)
- *   - GraphView: real force-directed canvas (GraphCanvas)
- *   - StepInspector: right drawer inside canvas, reusable
- *   - Runtime tab: structured placeholder with status/timeline/log
- *   - Bottom console: improved structured tabs
+ * Phase 5 additions:
+ *   - Start Run button calls providerService → openclawProvider
+ *   - Run state (RunRecord) managed by runService; updates instance status
+ *   - Chat panel: real message list tied to active run; input box enabled
+ *   - Runtime tab: real run status, event timeline, provider info
+ *   - Bottom Logs/Steps/Trace tabs: wired to run events and step statuses
+ *   - Delete Instance: confirmation dialog → removes and navigates back
+ *   - Provider connection status shown in header when run is initiating
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "@/lib/router";
 import {
   Cpu, ArrowLeft, AlertCircle, Layers, FileText, Zap, Wrench,
   CircleDot, ChevronDown, ChevronUp, Terminal, ListChecks,
   MessageSquare, PenLine, PanelLeft, BarChart3, GitBranch,
   Info, ChevronRight, Tag, Calendar, Hash, Clock, PlayCircle,
-  Activity, GripVertical,
+  Activity, GripVertical, Square, Send, Plug, WifiOff,
+  CheckCircle2, Loader2, Trash2, AlertTriangle,
 } from "lucide-react";
 import { blueprintService } from "../blueprints/blueprintService";
 import { instanceService } from "../instances/instanceService";
+import { providerService } from "../providers/providerService";
+import { runService } from "../providers/runService";
 import { CreateInstanceModal } from "../components/CreateInstanceModal";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import type { Blueprint, BlueprintStep } from "../blueprints/blueprintTypes";
 import type { Instance, InstanceStepSnapshot } from "../instances/instanceTypes";
+import type { RunRecord } from "../providers/providerTypes";
 import { cn } from "@/lib/utils";
 import { FlowStepCard } from "../components/FlowStepCard";
 import type { FlowStep } from "../components/FlowStepCard";
@@ -56,6 +60,16 @@ const STATUS_COLORS: Record<string, string> = {
   completed: "text-blue-600 bg-blue-500/10",
   failed:    "text-destructive bg-destructive/10",
   cancelled: "text-muted-foreground bg-muted/40",
+};
+
+const STEP_STATUS_COLORS: Record<string, string> = {
+  idle:         "text-muted-foreground/40 bg-muted/20",
+  ready:        "text-sky-600 bg-sky-500/10",
+  running:      "text-emerald-600 bg-emerald-500/10",
+  waiting:      "text-amber-600 bg-amber-500/10",
+  human_review: "text-purple-600 bg-purple-500/10",
+  completed:    "text-blue-600 bg-blue-500/10",
+  failed:       "text-destructive bg-destructive/10",
 };
 
 // ─── Left Panel ────────────────────────────────────────────────────────────────
@@ -85,8 +99,11 @@ function MetaLine({ icon, label, value }: { icon?: React.ReactNode; label: strin
   );
 }
 
-function LeftPanel({ mode, blueprint, instance }: {
+function LeftPanel({
+  mode, blueprint, instance, onDeleteInstance,
+}: {
   mode: StudioMode; blueprint?: Blueprint | null; instance?: Instance | null;
+  onDeleteInstance?: () => void;
 }) {
   return (
     <aside className="flex w-52 shrink-0 flex-col border-r border-border bg-card overflow-y-auto">
@@ -178,6 +195,18 @@ function LeftPanel({ mode, blueprint, instance }: {
               ))}
             </LeftPanelSection>
           )}
+          {onDeleteInstance && (
+            <div className="mt-auto p-3 border-t border-border/40">
+              <button
+                type="button"
+                onClick={onDeleteInstance}
+                className="flex w-full items-center gap-2 rounded border border-destructive/30 px-2.5 py-1.5 text-xs text-destructive/70 hover:text-destructive hover:bg-destructive/5 transition-colors"
+              >
+                <Trash2 size={11} />
+                Delete Instance
+              </button>
+            </div>
+          )}
         </>
       )}
 
@@ -196,12 +225,22 @@ function LeftPanel({ mode, blueprint, instance }: {
 function StudioHeader({
   mode, blueprint, instance, leftOpen, onToggleLeft,
   centerTab, onCenterTab, onBack, onCreateInstance,
+  runRecord, onStartRun, onStopRun, runStarting,
+  providerConnected,
 }: {
   mode: StudioMode; blueprint?: Blueprint | null; instance?: Instance | null;
   leftOpen: boolean; onToggleLeft: () => void;
   centerTab: CenterTab; onCenterTab: (t: CenterTab) => void;
   onBack: () => void; onCreateInstance?: () => void;
+  runRecord: RunRecord | null;
+  onStartRun?: () => void;
+  onStopRun?: () => void;
+  runStarting: boolean;
+  providerConnected: boolean;
 }) {
+  const isRunning = runRecord?.status === "running";
+  const displayStatus = runRecord ? runRecord.status : (instance?.status ?? "draft");
+
   return (
     <div className="shrink-0 border-b border-border px-3 py-2 flex items-center gap-2 bg-card">
       <button type="button" onClick={onBack}
@@ -238,9 +277,26 @@ function StudioHeader({
         </span>
       )}
       {mode === "instance" && instance && (
-        <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide", STATUS_COLORS[instance.status] ?? STATUS_COLORS.draft)}>
-          {instance.status}
+        <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide", STATUS_COLORS[displayStatus] ?? STATUS_COLORS.draft)}>
+          {displayStatus}
         </span>
+      )}
+
+      {/* Provider indicator (instance mode only) */}
+      {mode === "instance" && (
+        <div className={cn(
+          "flex items-center gap-1 text-[10px] shrink-0",
+          providerConnected ? "text-emerald-500/70" : "text-muted-foreground/30",
+        )} title={providerConnected ? "Provider configured" : "No provider configured — go to Connections"}>
+          {providerConnected
+            ? <Plug size={10} />
+            : <WifiOff size={10} />}
+          <span className="hidden sm:inline">
+            {providerConnected
+              ? providerService.getConfig()?.type ?? "provider"
+              : "no provider"}
+          </span>
+        </div>
       )}
 
       {/* Center tab switcher */}
@@ -255,9 +311,14 @@ function StudioHeader({
                   : "text-muted-foreground/60 hover:text-muted-foreground",
                 i > 0 && "border-l border-border"
               )}>
-              {tab === "graph"   ? "Graph"   :
-               tab === "flow"    ? "Flow"    :
-               "Runtime"}
+              {tab === "runtime"
+                ? (isRunning ? (
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Runtime
+                    </span>
+                  ) : "Runtime")
+                : tab === "graph" ? "Graph" : "Flow"}
             </button>
           ))}
         </div>
@@ -270,10 +331,29 @@ function StudioHeader({
             <Layers size={12} />Create Instance
           </button>
         )}
-        {mode === "instance" && (
-          <button type="button" disabled title="Execution wiring coming post-Phase 4"
-            className="flex items-center gap-1.5 rounded border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground cursor-not-allowed opacity-40">
-            <PlayCircle size={12} />Start Run
+
+        {mode === "instance" && isRunning && (
+          <button type="button" onClick={onStopRun}
+            className="flex items-center gap-1.5 rounded border border-destructive/60 bg-destructive/10 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/20 transition-colors">
+            <Square size={11} />Stop
+          </button>
+        )}
+
+        {mode === "instance" && !isRunning && (
+          <button type="button"
+            onClick={onStartRun}
+            disabled={runStarting}
+            className={cn(
+              "flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-semibold transition-all",
+              providerConnected
+                ? "border-[var(--grace-accent)] bg-[var(--grace-accent)] text-white hover:opacity-90"
+                : "border-border text-muted-foreground/50 cursor-not-allowed opacity-50",
+            )}
+            title={providerConnected ? "Start a run for this instance" : "Configure a provider in Connections first"}>
+            {runStarting
+              ? <Loader2 size={12} className="animate-spin" />
+              : <PlayCircle size={12} />}
+            {runStarting ? "Starting…" : "Start Run"}
           </button>
         )}
       </div>
@@ -283,7 +363,6 @@ function StudioHeader({
 
 // ─── Flow View (horizontal lane) ──────────────────────────────────────────────
 
-// Agent diamond chip shown in the FlowView agent bar
 function AgentChip({ agent }: { agent: StudioAgent }) {
   return (
     <div
@@ -294,7 +373,6 @@ function AgentChip({ agent }: { agent: StudioAgent }) {
           : "border border-dashed border-muted-foreground/35 bg-muted/20 text-muted-foreground/60",
       )}
     >
-      {/* diamond */}
       <span
         className="shrink-0"
         style={{
@@ -318,15 +396,13 @@ function AgentChip({ agent }: { agent: StudioAgent }) {
 }
 
 function FlowView({
-  steps,
-  agents,
-  selectedStep,
-  onInspect,
+  steps, agents, selectedStep, onInspect, runRecord,
 }: {
   steps: FlowStep[];
   agents: StudioAgent[];
   selectedStep: FlowStep | null;
   onInspect: (step: FlowStep) => void;
+  runRecord: RunRecord | null;
 }) {
   if (steps.length === 0) {
     return (
@@ -337,9 +413,13 @@ function FlowView({
     );
   }
 
+  function getStepStatus(stepId: string) {
+    if (!runRecord) return undefined;
+    return runRecord.steps.find((s) => s.stepId === stepId)?.status;
+  }
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Agent bar — fixed above the scrollable lane */}
       <div className="shrink-0 flex items-center gap-2.5 border-b border-border/40 px-5 py-2 bg-card/40">
         <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/35 shrink-0">
           Agents
@@ -351,7 +431,6 @@ function FlowView({
         )}
       </div>
 
-      {/* Horizontal step lane */}
       <div className="flex-1 overflow-x-auto overflow-y-auto">
         <div
           className="flex items-start gap-0 px-6 py-8 min-h-full"
@@ -364,6 +443,7 @@ function FlowView({
                 index={i}
                 focused={selectedStep?.id === step.id}
                 onInspect={onInspect}
+                stepStatus={getStepStatus(step.id)}
               />
               {i < steps.length - 1 && (
                 <div className="flex items-center px-2 shrink-0">
@@ -376,7 +456,6 @@ function FlowView({
         </div>
       </div>
 
-      {/* Horizontal scroll hint */}
       {steps.length > 3 && (
         <div className="shrink-0 flex items-center justify-center py-1.5 border-t border-border/30">
           <span className="text-[10px] text-muted-foreground/25">scroll horizontally to see all steps</span>
@@ -388,8 +467,15 @@ function FlowView({
 
 // ─── Runtime View ──────────────────────────────────────────────────────────────
 
-function RuntimeView({ mode, instance }: { mode: StudioMode; instance?: Instance | null }) {
-  const status = mode === "instance" && instance ? instance.status : "idle";
+function RuntimeView({
+  mode, instance, runRecord,
+}: {
+  mode: StudioMode; instance?: Instance | null; runRecord: RunRecord | null;
+}) {
+  const isRunning = runRecord?.status === "running";
+  const status = runRecord?.status ?? (mode === "instance" && instance ? instance.status : "idle");
+  const providerConfig = providerService.getConfig();
+  const events = runRecord?.events ?? [];
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto p-5 gap-5">
@@ -397,21 +483,21 @@ function RuntimeView({ mode, instance }: { mode: StudioMode; instance?: Instance
       <div className="rounded-lg border border-border bg-card p-4 flex items-center gap-3">
         <div className={cn(
           "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-          status === "running" ? "bg-emerald-500/15" : "bg-muted/40"
+          isRunning ? "bg-emerald-500/15" : "bg-muted/40"
         )}>
-          <Activity size={16} className={status === "running" ? "text-emerald-500" : "text-muted-foreground/40"} />
+          <Activity size={16} className={isRunning ? "text-emerald-500 animate-pulse" : "text-muted-foreground/40"} />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">
-            {status === "running" ? "Run in progress" : "No active run"}
+            {isRunning ? "Run in progress" : runRecord ? `Run ${runRecord.status}` : "No active run"}
           </p>
-          <p className="text-xs text-muted-foreground/60 mt-0.5">
-            {status === "running"
-              ? "Execution is live — logs are streaming."
+          <p className="text-xs text-muted-foreground/60 mt-0.5 truncate">
+            {runRecord
+              ? `Run ID: ${runRecord.id} · started ${new Date(runRecord.startedAt).toLocaleTimeString()}`
               : "Start a run to see live execution here."}
           </p>
         </div>
-        <div className="ml-auto">
+        <div className="flex items-center gap-2 shrink-0">
           <span className={cn(
             "rounded px-2 py-1 text-[10px] font-medium uppercase",
             STATUS_COLORS[status] ?? STATUS_COLORS.draft
@@ -421,42 +507,113 @@ function RuntimeView({ mode, instance }: { mode: StudioMode; instance?: Instance
         </div>
       </div>
 
-      {/* Timeline placeholder */}
-      <div>
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40 mb-2">
-          Execution Timeline
-        </p>
-        <div className="rounded-lg border border-border/50 bg-card/40 p-4 space-y-2 opacity-40 pointer-events-none" aria-hidden>
-          {["Initialise", "Step 1 — Planning", "Step 2 — Research", "Step 3 — Synthesis", "Finalise"].map((s, i) => (
-            <div key={s} className="flex items-center gap-3 text-xs">
-              <div className={cn("w-2 h-2 rounded-full shrink-0", i === 0 ? "bg-emerald-500/60" : "bg-muted-foreground/30")} />
-              <span className="text-muted-foreground">{s}</span>
-              <div className="flex-1 h-px bg-muted/40" />
-              <span className="text-muted-foreground/50 text-[10px]">—</span>
-            </div>
-          ))}
+      {/* Provider info */}
+      {(runRecord || providerConfig) && (
+        <div className="rounded-lg border border-border/50 bg-card p-3 flex items-center gap-3">
+          <Plug size={13} className="text-muted-foreground/40 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <span className="text-xs text-muted-foreground/60">Provider: </span>
+            <span className="text-xs font-medium">
+              {runRecord?.providerType ?? providerConfig?.type ?? "—"}
+            </span>
+            {runRecord?.providerRunId && (
+              <span className="ml-2 text-[10px] text-muted-foreground/40 font-mono">
+                gateway ID: {runRecord.providerRunId}
+              </span>
+            )}
+          </div>
+          {!providerConfig && (
+            <span className="text-[10px] text-amber-500/70 shrink-0">not configured</span>
+          )}
         </div>
-        <p className="mt-1.5 text-[10px] text-muted-foreground/30">Wired to live runtime in execution phase</p>
-      </div>
+      )}
 
-      {/* Log stream placeholder */}
-      <div>
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40 mb-2">
-          Log Stream
-        </p>
-        <div className="rounded-lg border border-border/50 bg-black/20 font-mono p-3 space-y-1 opacity-30 pointer-events-none" aria-hidden>
-          {[
-            "> [GRACE] Runtime initialised",
-            "> [AGENT] Primary agent connected",
-            "> [STEP 1] Starting: Planning",
-            "> [TOOL] web_search called with query='…'",
-            "> [STEP 2] Starting: Research",
-          ].map((line) => (
-            <p key={line} className="text-[10px] text-emerald-400/80">{line}</p>
-          ))}
+      {/* Step timeline */}
+      {runRecord && runRecord.steps.length > 0 && (
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40 mb-2">
+            Step Timeline
+          </p>
+          <div className="rounded-lg border border-border/50 bg-card p-3 space-y-2">
+            {runRecord.steps.map((step) => (
+              <div key={step.stepId} className="flex items-center gap-3 text-xs">
+                <div className={cn(
+                  "w-2 h-2 rounded-full shrink-0",
+                  step.status === "completed" ? "bg-emerald-500" :
+                  step.status === "running"   ? "bg-[var(--grace-accent)] animate-pulse" :
+                  step.status === "failed"    ? "bg-destructive" :
+                  "bg-muted-foreground/30"
+                )} />
+                <span className={cn(
+                  "truncate",
+                  step.status === "running" ? "text-[var(--grace-accent)] font-medium" : "text-muted-foreground"
+                )}>{step.stepName}</span>
+                <div className="flex-1 h-px bg-muted/30" />
+                <span className={cn(
+                  "text-[9px] rounded px-1 py-px uppercase font-medium",
+                  STEP_STATUS_COLORS[step.status] ?? STEP_STATUS_COLORS.idle
+                )}>{step.status}</span>
+              </div>
+            ))}
+          </div>
         </div>
-        <p className="mt-1.5 text-[10px] text-muted-foreground/30">Live log streaming — execution phase</p>
-      </div>
+      )}
+
+      {/* Timeline placeholder if no run */}
+      {!runRecord && (
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40 mb-2">
+            Execution Timeline
+          </p>
+          <div className="rounded-lg border border-border/50 bg-card/40 p-4 space-y-2 opacity-30 pointer-events-none" aria-hidden>
+            {["Initialise", "Step 1 — Planning", "Step 2 — Research", "Step 3 — Synthesis", "Finalise"].map((s, i) => (
+              <div key={s} className="flex items-center gap-3 text-xs">
+                <div className={cn("w-2 h-2 rounded-full shrink-0", i === 0 ? "bg-emerald-500/60" : "bg-muted-foreground/30")} />
+                <span className="text-muted-foreground">{s}</span>
+                <div className="flex-1 h-px bg-muted/40" />
+                <span className="text-muted-foreground/50 text-[10px]">—</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[10px] text-muted-foreground/30">Start a run to see the live timeline.</p>
+        </div>
+      )}
+
+      {/* Log stream */}
+      {runRecord && events.length > 0 && (
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40 mb-2">
+            Event Log
+          </p>
+          <div className="rounded-lg border border-border/50 bg-black/20 font-mono p-3 space-y-1 max-h-48 overflow-y-auto">
+            {events.map((ev) => (
+              <p key={ev.id} className={cn(
+                "text-[10px]",
+                ev.level === "error" ? "text-destructive/80" :
+                ev.level === "warn"  ? "text-amber-400/80" :
+                ev.level === "debug" ? "text-muted-foreground/40" :
+                "text-emerald-400/80"
+              )}>
+                &gt; [{ev.tag}] {ev.message}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!runRecord && (
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40 mb-2">
+            Log Stream
+          </p>
+          <div className="rounded-lg border border-border/50 bg-black/20 font-mono p-3 space-y-1 opacity-30 pointer-events-none" aria-hidden>
+            {["> [GRACE] Runtime initialised", "> [AGENT] Primary agent connected", "> [STEP 1] Starting: Planning", "> [TOOL] web_search called", "> [STEP 2] Starting: Research"].map((line) => (
+              <p key={line} className="text-[10px] text-emerald-400/80">{line}</p>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[10px] text-muted-foreground/30">Start a run to see live log streaming.</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -494,27 +651,18 @@ function LandingCanvas() {
         </div>
         <div className="grace-ghost absolute bottom-20 left-1/4 w-52 h-16 rounded-lg border border-[var(--grace-accent)]/10 bg-[var(--grace-accent-muted)]/20 p-3">
           <div className="h-2 w-24 rounded bg-[var(--grace-accent)]/20 mb-1.5" />
-          <div className="h-1.5 w-36 rounded bg-muted/25" />
-          <div className="h-1.5 w-20 rounded bg-muted/20 mt-1" />
+          <div className="h-1.5 w-36 rounded bg-[var(--grace-accent)]/10" />
         </div>
-        <div className="grace-ping absolute top-8 right-1/3 w-2 h-2 rounded-full bg-[var(--grace-accent)]/40" />
-        <div className="grace-ping absolute bottom-32 right-16 w-1.5 h-1.5 rounded-full bg-emerald-500/30" />
-        <div className="grace-ping absolute top-1/2 left-16 w-1.5 h-1.5 rounded-full bg-[var(--grace-accent)]/30" />
+        <div className="grace-ping absolute top-1/3 left-1/3 w-1.5 h-1.5 rounded-full bg-[var(--grace-accent)]/40" />
+        <div className="grace-ping absolute top-2/3 right-1/4 w-1 h-1 rounded-full bg-[var(--grace-accent)]/30" />
+        <div className="grace-ping absolute top-1/2 left-2/3 w-1.5 h-1.5 rounded-full bg-muted-foreground/30" />
       </div>
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center relative z-10">
-        <div className="rounded-full border border-[var(--grace-accent)]/20 bg-[var(--grace-accent-muted)] p-4">
-          <Cpu size={28} className="text-[var(--grace-accent)]/60" />
-        </div>
-        <div>
-          <p className="text-sm font-medium text-muted-foreground">Studio is ready</p>
-          <p className="mt-1.5 text-xs text-muted-foreground/50 max-w-xs leading-relaxed">
-            Open a Blueprint from Workflows, or select an Instance to view and configure it.
-          </p>
-        </div>
-        <div className="flex items-center gap-3 text-[10px] text-muted-foreground/30">
-          <span className="flex items-center gap-1"><CircleDot size={8} className="text-emerald-500/40" />System idle</span>
-          <span>·</span>
-          <span>No active run</span>
+
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none select-none" aria-hidden>
+        <Cpu size={28} className="text-muted-foreground/15" />
+        <div className="text-center">
+          <p className="text-xs font-medium text-muted-foreground/20">Studio</p>
+          <p className="text-[10px] text-muted-foreground/12 mt-0.5">Open a Blueprint or Instance to begin</p>
         </div>
       </div>
     </div>
@@ -525,16 +673,14 @@ function LandingCanvas() {
 
 function CenterCanvas({
   mode, blueprint, instance, centerTab, agents,
-  selectedStep, onInspect, onInspectorClose,
+  selectedStep, onInspect, onInspectorClose, runRecord,
 }: {
-  mode: StudioMode;
-  blueprint?: Blueprint | null;
-  instance?: Instance | null;
-  centerTab: CenterTab;
-  agents: StudioAgent[];
+  mode: StudioMode; blueprint?: Blueprint | null; instance?: Instance | null;
+  centerTab: CenterTab; agents: StudioAgent[];
   selectedStep: FlowStep | null;
   onInspect: (step: FlowStep) => void;
   onInspectorClose: () => void;
+  runRecord: RunRecord | null;
 }) {
   if (mode === "landing") return <LandingCanvas />;
 
@@ -552,7 +698,6 @@ function CenterCanvas({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-      {/* Blueprint template banner */}
       {mode === "blueprint" && (
         <div className="shrink-0 flex items-center gap-2 bg-[var(--grace-accent-muted)]/60 border-b border-[var(--grace-accent)]/20 px-4 py-1.5">
           <PenLine size={11} className="text-[var(--grace-accent)]/70" />
@@ -564,20 +709,18 @@ function CenterCanvas({
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Main canvas area */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {centerTab === "flow" && (
-            <FlowView steps={steps} agents={agents} selectedStep={selectedStep} onInspect={onInspect} />
+            <FlowView steps={steps} agents={agents} selectedStep={selectedStep} onInspect={onInspect} runRecord={runRecord} />
           )}
           {centerTab === "graph" && (
             <GraphCanvas steps={steps} agents={agents} onStepInspect={onInspect} />
           )}
           {centerTab === "runtime" && (
-            <RuntimeView mode={mode} instance={instance} />
+            <RuntimeView mode={mode} instance={instance} runRecord={runRecord} />
           )}
         </div>
 
-        {/* Step Inspector drawer */}
         {selectedStep && (
           <StepInspector step={selectedStep} onClose={onInspectorClose} />
         )}
@@ -586,47 +729,80 @@ function CenterCanvas({
   );
 }
 
-// ─── Right Panel ───────────────────────────────────────────────────────────────
+// ─── Right Panel (Chat) ────────────────────────────────────────────────────────
 
 function RightPanel({
-  mode,
-  width,
-  onStartResize,
+  mode, width, onStartResize, runRecord, onSendMessage,
 }: {
   mode: StudioMode;
   width: number;
   onStartResize: (e: React.MouseEvent) => void;
+  runRecord: RunRecord | null;
+  onSendMessage?: (msg: string) => void;
 }) {
+  const [input, setInput] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isRunning = runRecord?.status === "running";
+  const messages = runRecord?.chatMessages ?? [];
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length]);
+
+  function handleSend() {
+    const trimmed = input.trim();
+    if (!trimmed || !onSendMessage) return;
+    onSendMessage(trimmed);
+    setInput("");
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  }
+
   return (
     <aside
       className="relative flex shrink-0 flex-col border-l border-border bg-card"
       style={{ width }}
     >
-      {/* Drag handle — left edge */}
       <div
         onMouseDown={onStartResize}
         className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize z-10 group flex items-center justify-center hover:bg-[var(--grace-accent)]/20 transition-colors"
         title="Drag to resize chat panel"
       >
-        <GripVertical
-          size={12}
-          className="text-muted-foreground/20 group-hover:text-[var(--grace-accent)]/50 transition-colors"
-        />
+        <GripVertical size={12} className="text-muted-foreground/20 group-hover:text-[var(--grace-accent)]/50 transition-colors" />
       </div>
 
-      <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2 pl-4">
+      <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2 pl-4 shrink-0">
         <MessageSquare size={12} className="text-muted-foreground/60" />
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Chat</p>
-        {mode !== "landing" && (
-          <span className="ml-auto text-[10px] text-muted-foreground/40">Execution phase</span>
+        {isRunning && (
+          <span className="ml-auto flex items-center gap-1 text-[10px] text-emerald-500/70">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            live
+          </span>
+        )}
+        {!isRunning && mode !== "landing" && runRecord && (
+          <span className="ml-auto text-[10px] text-muted-foreground/40 capitalize">{runRecord.status}</span>
+        )}
+        {!isRunning && mode !== "landing" && !runRecord && (
+          <span className="ml-auto text-[10px] text-muted-foreground/30">no run</span>
         )}
       </div>
-      <div className="flex-1 flex flex-col items-center justify-center p-4 gap-3">
-        {mode === "landing" ? (
-          <p className="text-xs text-muted-foreground/30 text-center">No item open</p>
-        ) : (
-          <>
-            <div className="w-full space-y-1.5 opacity-40 pointer-events-none select-none" aria-hidden>
+
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        {mode === "landing" && (
+          <div className="flex h-full items-center justify-center">
+            <p className="text-xs text-muted-foreground/30 text-center">No item open</p>
+          </div>
+        )}
+
+        {mode !== "landing" && messages.length === 0 && !isRunning && (
+          <div className="flex flex-col h-full items-center justify-center gap-2">
+            <div className="w-full space-y-1.5 opacity-30 pointer-events-none select-none" aria-hidden>
               <div className="ml-auto w-4/5 rounded-lg rounded-br-none bg-[var(--grace-accent-muted)] px-2.5 py-1.5">
                 <div className="h-1.5 w-full rounded bg-[var(--grace-accent)]/20 mb-1" />
                 <div className="h-1.5 w-3/4 rounded bg-[var(--grace-accent)]/15" />
@@ -636,17 +812,64 @@ function RightPanel({
                 <div className="h-1.5 w-2/3 rounded bg-muted/30" />
               </div>
             </div>
-            <p className="text-[10px] text-muted-foreground/35 text-center leading-relaxed">
-              Agent chat will be available during runs.
+            <p className="text-[10px] text-muted-foreground/35 text-center leading-relaxed px-2">
+              Start a run to activate agent chat.
             </p>
-          </>
-        )}
-      </div>
-      {mode !== "landing" && (
-        <div className="border-t border-border/60 p-2">
-          <div className="flex items-center gap-2 rounded border border-border/60 bg-muted/20 px-3 py-1.5 opacity-50 cursor-not-allowed">
-            <span className="flex-1 text-xs text-muted-foreground/40">Message agent…</span>
           </div>
+        )}
+
+        {messages.map((msg) => (
+          <div key={msg.id} className={cn("flex flex-col", msg.role === "user" ? "items-end" : "items-start")}>
+            {msg.role === "system" ? (
+              <div className="w-full rounded border border-border/40 bg-muted/20 px-2.5 py-1.5">
+                <p className="text-[10px] text-muted-foreground/60 leading-snug">{msg.content}</p>
+              </div>
+            ) : msg.role === "user" ? (
+              <div className="max-w-[90%] rounded-lg rounded-br-none bg-[var(--grace-accent-muted)] border border-[var(--grace-accent)]/20 px-2.5 py-1.5">
+                <p className="text-xs text-foreground leading-snug">{msg.content}</p>
+                <p className="text-[9px] text-muted-foreground/40 mt-0.5 text-right">
+                  {new Date(msg.timestamp).toLocaleTimeString()}
+                </p>
+              </div>
+            ) : (
+              <div className="max-w-[90%] rounded-lg rounded-bl-none bg-card border border-border/60 px-2.5 py-1.5">
+                <p className="text-xs text-foreground leading-snug">{msg.content}</p>
+                <p className="text-[9px] text-muted-foreground/40 mt-0.5">
+                  {new Date(msg.timestamp).toLocaleTimeString()}
+                </p>
+              </div>
+            )}
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {mode !== "landing" && (
+        <div className="border-t border-border/60 p-2 shrink-0">
+          {isRunning ? (
+            <div className="flex items-end gap-2">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                rows={2}
+                placeholder="Message agent…"
+                className="flex-1 resize-none rounded border border-border/60 bg-muted/20 px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-[var(--grace-accent)] transition-all"
+              />
+              <button
+                type="button"
+                onClick={handleSend}
+                disabled={!input.trim()}
+                className="flex h-8 w-8 items-center justify-center rounded border border-[var(--grace-accent)] bg-[var(--grace-accent)] text-white disabled:opacity-30 hover:opacity-90 transition-opacity"
+              >
+                <Send size={12} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded border border-border/40 bg-muted/10 px-3 py-1.5 opacity-40 cursor-not-allowed">
+              <span className="flex-1 text-xs text-muted-foreground/50">Start a run to send messages</span>
+            </div>
+          )}
         </div>
       )}
     </aside>
@@ -665,8 +888,11 @@ function MetaItem({ label, value }: { label: string; value?: string }) {
   );
 }
 
-function BottomPanel({ mode, blueprint, instance }: {
+function BottomPanel({
+  mode, blueprint, instance, runRecord,
+}: {
   mode: StudioMode; blueprint?: Blueprint | null; instance?: Instance | null;
+  runRecord: RunRecord | null;
 }) {
   const [activeTab, setActiveTab] = useState<BottomTab>("logs");
   const [open, setOpen] = useState(true);
@@ -693,6 +919,9 @@ function BottomPanel({ mode, blueprint, instance }: {
     { id: "trace",   label: "Trace",   icon: <BarChart3  size={11} /> },
   ];
 
+  const runEvents = runRecord?.events ?? [];
+  const runSteps = runRecord?.steps ?? [];
+
   return (
     <div className={cn("shrink-0 border-t border-border bg-card flex flex-col transition-all duration-200", open ? "h-44" : "h-8")}>
       <div className="flex items-center gap-0 border-b border-border/60 h-8 shrink-0 px-1 overflow-x-auto">
@@ -706,6 +935,11 @@ function BottomPanel({ mode, blueprint, instance }: {
                 : "border-transparent text-muted-foreground/60 hover:text-muted-foreground"
             )}>
             {tab.icon}{tab.label}
+            {tab.id === "logs" && runEvents.length > 0 && (
+              <span className="ml-1 rounded-full bg-emerald-500/20 px-1 py-px text-[9px] text-emerald-600 font-semibold">
+                {runEvents.length}
+              </span>
+            )}
           </button>
         ))}
         <button type="button" onClick={() => setOpen((o) => !o)}
@@ -719,23 +953,38 @@ function BottomPanel({ mode, blueprint, instance }: {
         <div className="flex-1 overflow-y-auto px-4 py-2">
           {activeTab === "logs" && (
             <div className="font-mono space-y-1">
-              <div className="flex items-center gap-2 text-[10px] text-muted-foreground/50">
-                <span className="text-emerald-500/60">›</span>
-                <span>
-                  {mode === "landing"    && "Studio ready. Open a Blueprint or Instance to begin."}
-                  {mode === "blueprint"  && `Blueprint loaded — template mode · v${blueprint?.version ?? "?"} · ${steps.length} step(s) defined.`}
-                  {mode === "instance"   && `Instance loaded — status: ${instance?.status ?? "draft"} · ${steps.length} step(s).`}
-                </span>
-              </div>
-              {mode !== "landing" && (
-                <>
-                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground/30">
-                    <span className="text-muted-foreground/20">›</span>
-                    <span>Runtime log stream will appear here during active runs.</span>
+              {runEvents.length > 0 ? (
+                runEvents.map((ev) => (
+                  <div key={ev.id} className="flex items-start gap-2 text-[10px]">
+                    <span className={cn(
+                      "shrink-0",
+                      ev.level === "error" ? "text-destructive/60" :
+                      ev.level === "warn"  ? "text-amber-400/60" :
+                      ev.level === "debug" ? "text-muted-foreground/30" :
+                      "text-emerald-500/60"
+                    )}>›</span>
+                    <span className="text-muted-foreground/40 shrink-0">{new Date(ev.timestamp).toLocaleTimeString()}</span>
+                    <span className="text-muted-foreground/50 shrink-0">[{ev.tag}]</span>
+                    <span className={cn(
+                      ev.level === "error" ? "text-destructive/80" :
+                      ev.level === "warn"  ? "text-amber-400/80" :
+                      "text-muted-foreground"
+                    )}>{ev.message}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground/20 mt-1">
+                ))
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground/50">
+                    <span className="text-emerald-500/60">›</span>
+                    <span>
+                      {mode === "landing"    && "Studio ready. Open a Blueprint or Instance to begin."}
+                      {mode === "blueprint"  && `Blueprint loaded — template mode · v${blueprint?.version ?? "?"} · ${steps.length} step(s) defined.`}
+                      {mode === "instance"   && `Instance loaded — status: ${instance?.status ?? "draft"} · ${steps.length} step(s). Start a run to see logs.`}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground/25 mt-1">
                     <span className="text-muted-foreground/15">›</span>
-                    <span>Graph | Flow | Runtime views available via header tabs.</span>
+                    <span>Run log stream will appear here during active runs.</span>
                   </div>
                 </>
               )}
@@ -745,15 +994,23 @@ function BottomPanel({ mode, blueprint, instance }: {
           {activeTab === "steps" && (
             <div className="flex flex-wrap gap-2">
               {steps.length === 0 && <p className="text-xs text-muted-foreground/40">No steps defined.</p>}
-              {steps.map((step, idx) => (
-                <div key={step.id} className="flex items-center gap-1.5 rounded border border-border/60 bg-muted/30 px-2.5 py-1 text-xs">
-                  <span className="font-bold text-[var(--grace-accent)]/60 text-[10px]">{idx + 1}</span>
-                  <span>{step.name}</span>
-                  {step.agentRole && (
-                    <span className="text-[9px] text-muted-foreground/50 capitalize ml-1">· {step.agentRole}</span>
-                  )}
-                </div>
-              ))}
+              {steps.map((step, idx) => {
+                const runStep = runSteps.find((rs) => rs.stepId === step.id);
+                return (
+                  <div key={step.id} className={cn(
+                    "flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs",
+                    runStep?.status === "running" ? "border-[var(--grace-accent)]/40 bg-[var(--grace-accent-muted)]" : "border-border/60 bg-muted/30"
+                  )}>
+                    <span className="font-bold text-[var(--grace-accent)]/60 text-[10px]">{idx + 1}</span>
+                    <span>{step.name}</span>
+                    {runStep && (
+                      <span className={cn("text-[9px] rounded px-1 py-px uppercase", STEP_STATUS_COLORS[runStep.status] ?? "")}>
+                        {runStep.status}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -785,7 +1042,12 @@ function BottomPanel({ mode, blueprint, instance }: {
 
           {activeTab === "outputs" && (
             <div className="space-y-1.5">
-              {outputs.length === 0 && <p className="text-xs text-muted-foreground/40">No outputs defined.</p>}
+              {outputs.length === 0 && runRecord && (
+                <p className="text-xs text-muted-foreground/40">No outputs produced yet.</p>
+              )}
+              {outputs.length === 0 && !runRecord && (
+                <p className="text-xs text-muted-foreground/40">No outputs defined.</p>
+              )}
               {outputs.map((out) => (
                 <div key={out.id} className="flex items-center gap-2 rounded border border-border/60 bg-muted/30 px-2.5 py-1.5 text-xs">
                   <FileText size={10} className="text-muted-foreground/60" />
@@ -821,6 +1083,8 @@ function BottomPanel({ mode, blueprint, instance }: {
                   <MetaItem label="Updated" value={new Date(instance.updatedAt).toLocaleDateString()} />
                   <MetaItem label="Config" value={`${instance.configSnapshot.length} answer(s)`} />
                   <MetaItem label="Agents" value={`${instance.agentAssignments.length} assigned`} />
+                  {runRecord && <MetaItem label="Run ID" value={runRecord.id} />}
+                  {runRecord && <MetaItem label="Provider" value={runRecord.providerType} />}
                 </>
               )}
               {mode === "landing" && (
@@ -831,24 +1095,36 @@ function BottomPanel({ mode, blueprint, instance }: {
 
           {activeTab === "trace" && (
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-[10px] text-muted-foreground/50">
-                <span className="text-muted-foreground/30">›</span>
-                <span>Execution trace entries will stream here during and after runs.</span>
-              </div>
-              <div className="flex flex-wrap gap-2 opacity-20 pointer-events-none" aria-hidden>
-                {[
-                  { label: "Init",      status: "ok" },
-                  { label: "Step 1",    status: "ok" },
-                  { label: "Tool call", status: "ok" },
-                  { label: "Step 2",    status: "pending" },
-                  { label: "Complete",  status: "pending" },
-                ].map((item) => (
-                  <div key={item.label} className="flex items-center gap-2 rounded border border-border/60 bg-muted/30 px-2.5 py-1 text-xs">
-                    <div className={cn("w-1.5 h-1.5 rounded-full", item.status === "ok" ? "bg-emerald-500/60" : "bg-muted-foreground/40")} />
-                    <span>{item.label}</span>
+              {runEvents.length > 0 ? (
+                runEvents.map((ev) => (
+                  <div key={ev.id} className="flex items-center gap-2 rounded border border-border/40 bg-muted/20 px-2.5 py-1 text-xs">
+                    <div className={cn(
+                      "w-1.5 h-1.5 rounded-full shrink-0",
+                      ev.level === "error" ? "bg-destructive" :
+                      ev.level === "warn"  ? "bg-amber-500" :
+                      "bg-emerald-500/60"
+                    )} />
+                    <span className="text-muted-foreground/50 text-[10px] shrink-0">{new Date(ev.timestamp).toLocaleTimeString()}</span>
+                    <span className="text-muted-foreground shrink-0">[{ev.tag}]</span>
+                    <span className="truncate text-foreground/70">{ev.message}</span>
                   </div>
-                ))}
-              </div>
+                ))
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground/50">
+                    <span className="text-muted-foreground/30">›</span>
+                    <span>Execution trace entries will appear here during and after runs.</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2 opacity-20 pointer-events-none" aria-hidden>
+                    {[{ label: "Init", status: "ok" }, { label: "Step 1", status: "ok" }, { label: "Tool call", status: "ok" }, { label: "Step 2", status: "pending" }, { label: "Complete", status: "pending" }].map((item) => (
+                      <div key={item.label} className="flex items-center gap-2 rounded border border-border/60 bg-muted/30 px-2.5 py-1 text-xs">
+                        <div className={cn("w-1.5 h-1.5 rounded-full", item.status === "ok" ? "bg-emerald-500/60" : "bg-muted-foreground/40")} />
+                        <span>{item.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -876,16 +1152,30 @@ export function GraceStudio() {
   const [centerTab, setCenterTab] = useState<CenterTab>("flow");
   const [chatWidth, setChatWidth] = useState(CHAT_DEFAULT);
 
-  // Step inspector state — shared across Flow and Graph
+  // Run state
+  const [runRecord, setRunRecord] = useState<RunRecord | null>(null);
+  const [runStarting, setRunStarting] = useState(false);
+
+  // Delete instance
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  // Step inspector state
   const [selectedStep, setSelectedStep] = useState<FlowStep | null>(null);
 
   const mode: StudioMode = blueprintId ? "blueprint" : instanceId ? "instance" : "landing";
+  const providerConnected = providerService.isConnected();
 
-  // Close inspector when tab changes to runtime
   function handleCenterTab(tab: CenterTab) {
     setCenterTab(tab);
     if (tab === "runtime") setSelectedStep(null);
   }
+
+  // Auto-switch to Runtime tab when run is active
+  useEffect(() => {
+    if (runRecord?.status === "running" && centerTab === "flow") {
+      setCenterTab("runtime");
+    }
+  }, [runRecord?.status]);
 
   // Drag-to-resize chat panel
   const handleStartChatResize = useCallback((e: React.MouseEvent) => {
@@ -893,7 +1183,6 @@ export function GraceStudio() {
     const startX = e.clientX;
     const startWidth = chatWidth;
     function onMove(ev: MouseEvent) {
-      // dragging left = startX - ev.clientX > 0 = growing
       const delta = startX - ev.clientX;
       setChatWidth(Math.max(CHAT_MIN, Math.min(CHAT_MAX, startWidth + delta)));
     }
@@ -905,58 +1194,130 @@ export function GraceStudio() {
     window.addEventListener("mouseup", onUp);
   }, [chatWidth]);
 
-  // Compute studio agents from blueprint or instance
+  // Compute studio agents
   const studioAgents: StudioAgent[] = (() => {
     if (mode === "blueprint" && blueprint) {
       const agents: StudioAgent[] = [];
       if (blueprint.agentConfig.primary) {
-        agents.push({
-          id: "primary",
-          label: blueprint.agentConfig.primary.label,
-          role: blueprint.agentConfig.primary.role,
-          linked: false, // blueprint templates never have real adapters linked
-        });
+        agents.push({ id: "primary", label: blueprint.agentConfig.primary.label, role: blueprint.agentConfig.primary.role, linked: false });
       }
       blueprint.agentConfig.specialists?.forEach((sp, i) => {
-        agents.push({
-          id: `specialist-${i}`,
-          label: sp.label,
-          role: sp.role,
-          linked: false,
-        });
+        agents.push({ id: `specialist-${i}`, label: sp.label, role: sp.role, linked: false });
       });
       return agents;
     }
     if (mode === "instance" && instance) {
-      // Build from agentConfig via blueprint snapshot — use agentAssignments for linked status
-      const assignedRoles = new Set(instance.agentAssignments.map((a) => a.role));
       return instance.agentAssignments.map((a) => ({
         id: a.agentId || `${a.role}-${a.label}`,
         label: a.agentName || a.label,
         role: a.role,
-        linked: assignedRoles.has(a.role) && !!a.agentId,
+        linked: !!a.agentId,
       }));
     }
     return [];
   })();
 
+  // Load blueprint/instance; restore latest run if instance
   useEffect(() => {
     setInitializing(true);
     setNotFound(false);
     setBlueprint(null);
     setInstance(null);
     setSelectedStep(null);
+    setRunRecord(null);
 
     if (blueprintId) {
       const bp = blueprintService.getById(blueprintId);
       if (bp) setBlueprint(bp); else setNotFound(true);
     } else if (instanceId) {
       const inst = instanceService.getById(instanceId);
-      if (inst) setInstance(inst); else setNotFound(true);
+      if (inst) {
+        setInstance(inst);
+        const latestRun = runService.getLatestRun(instanceId);
+        if (latestRun) setRunRecord(latestRun);
+      } else {
+        setNotFound(true);
+      }
     }
 
     setInitializing(false);
   }, [blueprintId, instanceId]);
+
+  async function handleStartRun() {
+    if (!instance || !instanceId) return;
+    if (!providerConnected) return;
+
+    setRunStarting(true);
+    const active = providerService.getActive();
+    if (!active) { setRunStarting(false); return; }
+
+    const result = await active.provider.startRun(active.config, {
+      instanceId: instance.id,
+      instanceName: instance.name,
+      steps: instance.graphSnapshot.map((s) => ({ id: s.id, name: s.name })),
+      agentAssignments: instance.agentAssignments,
+    });
+
+    const run = runService.createRun({
+      instanceId: instance.id,
+      instanceName: instance.name,
+      providerType: active.config.type,
+      stepNames: instance.graphSnapshot.map((s) => ({ id: s.id, name: s.name })),
+      providerRunId: result.providerRunId,
+    });
+
+    // Append provider feedback
+    if (result.message) {
+      runService.appendEvent(run.id, {
+        level: result.status === "failed" ? "warn" : "info",
+        tag: "PROVIDER",
+        message: result.message,
+      });
+    }
+
+    // Update instance status
+    const updated = instanceService.updateStatus(instance.id, result.status === "failed" ? "failed" : "running");
+    if (updated) setInstance(updated);
+
+    setRunRecord(runService.getById(run.id));
+    setRunStarting(false);
+    setCenterTab("runtime");
+  }
+
+  function handleStopRun() {
+    if (!runRecord || !instance) return;
+    runService.updateRunStatus(runRecord.id, "cancelled");
+    runService.appendEvent(runRecord.id, {
+      level: "info",
+      tag: "GRACE",
+      message: "Run cancelled by user.",
+    });
+    const updated = instanceService.updateStatus(instance.id, "cancelled");
+    if (updated) setInstance(updated);
+    setRunRecord(runService.getById(runRecord.id));
+  }
+
+  function handleSendMessage(msg: string) {
+    if (!runRecord) return;
+    // Store user message
+    runService.appendChatMessage(runRecord.id, {
+      role: "user",
+      content: msg,
+    });
+    // Append event
+    runService.appendEvent(runRecord.id, {
+      level: "info",
+      tag: "USER",
+      message: `User message: ${msg.slice(0, 80)}${msg.length > 80 ? "…" : ""}`,
+    });
+    // TODO (Phase 6): Send to provider via active.provider.sendChat()
+    // For now, append a system response noting the limitation
+    runService.appendChatMessage(runRecord.id, {
+      role: "system",
+      content: "Message recorded. Interactive chat relay to the OpenClaw agent requires Phase 6 gateway integration.",
+    });
+    setRunRecord(runService.getById(runRecord.id));
+  }
 
   function handleBack() {
     if (mode === "blueprint") navigate("/grace/library");
@@ -967,6 +1328,12 @@ export function GraceStudio() {
   function handleInstanceCreated(newInstance: ReturnType<typeof instanceService.create>) {
     setCreateInstanceOpen(false);
     navigate(`/grace/studio/instance/${newInstance.id}`);
+  }
+
+  function handleDeleteInstance() {
+    if (!instanceId) return;
+    instanceService.remove(instanceId);
+    navigate("/grace/instances");
   }
 
   if (initializing && (blueprintId || instanceId)) {
@@ -1001,11 +1368,19 @@ export function GraceStudio() {
         leftOpen={leftOpen} onToggleLeft={() => setLeftOpen((o) => !o)}
         centerTab={centerTab} onCenterTab={handleCenterTab}
         onBack={handleBack} onCreateInstance={() => setCreateInstanceOpen(true)}
+        runRecord={runRecord}
+        onStartRun={handleStartRun}
+        onStopRun={handleStopRun}
+        runStarting={runStarting}
+        providerConnected={providerConnected}
       />
 
       <div className="flex flex-1 overflow-hidden">
         {leftOpen && mode !== "landing" && (
-          <LeftPanel mode={mode} blueprint={blueprint} instance={instance} />
+          <LeftPanel
+            mode={mode} blueprint={blueprint} instance={instance}
+            onDeleteInstance={mode === "instance" ? () => setDeleteOpen(true) : undefined}
+          />
         )}
 
         <CenterCanvas
@@ -1015,12 +1390,19 @@ export function GraceStudio() {
           selectedStep={selectedStep}
           onInspect={(step) => setSelectedStep(step)}
           onInspectorClose={() => setSelectedStep(null)}
+          runRecord={runRecord}
         />
 
-        <RightPanel mode={mode} width={chatWidth} onStartResize={handleStartChatResize} />
+        <RightPanel
+          mode={mode}
+          width={chatWidth}
+          onStartResize={handleStartChatResize}
+          runRecord={runRecord}
+          onSendMessage={handleSendMessage}
+        />
       </div>
 
-      <BottomPanel mode={mode} blueprint={blueprint} instance={instance} />
+      <BottomPanel mode={mode} blueprint={blueprint} instance={instance} runRecord={runRecord} />
 
       {blueprint && (
         <CreateInstanceModal
@@ -1030,6 +1412,15 @@ export function GraceStudio() {
           onCreated={handleInstanceCreated}
         />
       )}
+
+      <ConfirmDialog
+        open={deleteOpen}
+        title="Delete Instance"
+        description={`Are you sure you want to delete "${instance?.name ?? "this instance"}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={handleDeleteInstance}
+        onCancel={() => setDeleteOpen(false)}
+      />
     </div>
   );
 }

@@ -14,12 +14,13 @@
  */
 
 import { useState, useMemo, useRef } from "react";
-import { BookOpen, Plus, Upload, FileJson, Link as LinkIcon, AlertCircle } from "lucide-react";
+import { BookOpen, Plus, Upload, FileJson, Link as LinkIcon, AlertCircle, Trash2 } from "lucide-react";
 import { useNavigate } from "@/lib/router";
 import { blueprintService } from "../blueprints/blueprintService";
 import { BlueprintCard } from "../components/BlueprintCard";
 import { ManageBlueprintModal } from "../components/ManageBlueprintModal";
 import { CreateWorkflowModal } from "../components/CreateWorkflowModal";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { SearchFilterBar, type FilterDef, type SortOption } from "../components/SearchFilterBar";
 import type { Blueprint } from "../blueprints/blueprintTypes";
 import {
@@ -186,6 +187,7 @@ export function GraceWorkflowLibrary() {
   const [importOpen, setImportOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [managingBlueprint, setManagingBlueprint] = useState<Blueprint | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Blueprint | null>(null);
 
   const [search, setSearch] = useState("");
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
@@ -223,6 +225,13 @@ export function GraceWorkflowLibrary() {
 
   function handleCreated() {
     setCreateOpen(false);
+    setRefreshKey((k) => k + 1);
+  }
+
+  function handleDeleteBlueprint() {
+    if (!deleteTarget) return;
+    blueprintService.remove(deleteTarget.id);
+    setDeleteTarget(null);
     setRefreshKey((k) => k + 1);
   }
 
@@ -302,13 +311,22 @@ export function GraceWorkflowLibrary() {
           viewMode === "card" ? "grid gap-3 sm:grid-cols-2" : "space-y-1.5"
         )}>
           {filtered.map((bp) => (
-            <BlueprintCard
-              key={bp.id}
-              blueprint={bp}
-              onOpen={handleOpen}
-              onManage={handleManage}
-              viewMode={viewMode}
-            />
+            <div key={bp.id} className="relative group">
+              <BlueprintCard
+                blueprint={bp}
+                onOpen={handleOpen}
+                onManage={handleManage}
+                viewMode={viewMode}
+              />
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(bp)}
+                className="absolute top-2 right-2 flex items-center justify-center w-6 h-6 rounded text-muted-foreground/20 hover:text-destructive hover:bg-destructive/10 transition-all opacity-0 group-hover:opacity-100 z-10"
+                title="Delete blueprint"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
           ))}
         </div>
       )}
@@ -330,6 +348,15 @@ export function GraceWorkflowLibrary() {
           onUpdated={handleUpdated}
         />
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Blueprint"
+        description={`Delete "${deleteTarget?.name ?? "this blueprint"}"? This removes the blueprint template. Existing instances derived from it are not affected.`}
+        confirmLabel="Delete"
+        onConfirm={handleDeleteBlueprint}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

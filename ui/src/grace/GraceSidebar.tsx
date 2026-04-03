@@ -27,6 +27,7 @@ import {
   Monitor,
   Building2,
   LibraryBig,
+  Plug,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/context/ThemeContext";
@@ -55,8 +56,9 @@ const PRIMARY_NAV: GraceNavItem[] = [
 ];
 
 const BOTTOM_NAV: GraceNavItem[] = [
-  { label: "Settings", to: "/grace/settings", icon: <Settings size={16} /> },
-  { label: "Admin",    to: "/grace/admin",    icon: <ShieldCheck size={16} /> },
+  { label: "Connections", to: "/grace/connections", icon: <Plug size={16} /> },
+  { label: "Settings",    to: "/grace/settings",    icon: <Settings size={16} /> },
+  { label: "Admin",       to: "/grace/admin",       icon: <ShieldCheck size={16} /> },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

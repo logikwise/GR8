@@ -58,6 +58,7 @@ import { GraceSkills } from "./grace/pages/Skills";
 import { GraceTools } from "./grace/pages/Tools";
 import { GraceOutputs } from "./grace/pages/Outputs";
 import { GraceLibrary } from "./grace/pages/Library";
+import { GraceConnections } from "./grace/pages/Connections";
 import { GraceSettings } from "./grace/pages/GraceSettings";
 import { GraceAdmin } from "./grace/pages/Admin";
 import { GraceAbout } from "./grace/pages/About";
@@ -339,6 +340,7 @@ export function App() {
             <Route path="tools" element={<GraceTools />} />
             <Route path="outputs" element={<GraceOutputs />} />
             <Route path="knowledge" element={<GraceLibrary />} />
+            <Route path="connections" element={<GraceConnections />} />
             <Route path="settings" element={<GraceSettings />} />
             <Route path="admin" element={<GraceAdmin />} />
             <Route path="about" element={<GraceAbout />} />

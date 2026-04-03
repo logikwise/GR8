@@ -1,16 +1,17 @@
 /**
- * FlowStepCard
+ * FlowStepCard — Phase 5
  *
  * Horizontal flow step card for the Studio Flow view.
- * Collapsed: step number · name · role badge · status dot · inspect icon
- * Expanded:  + description, skills, tools, prompt, output definition
+ * Now accepts optional stepStatus from the active run record
+ * so visual state reflects real execution progress.
  *
- * Reusable across Flow view. Calls onInspect to open StepInspector.
+ * Statuses: idle | ready | running | waiting | human_review | completed | failed
  */
 
 import { useState } from "react";
-import { Zap, Wrench, ChevronDown, ChevronUp, Search, CircleDot } from "lucide-react";
+import { Zap, Wrench, ChevronDown, ChevronUp, Search, CircleDot, Loader2, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { StepStatus } from "../providers/providerTypes";
 
 export interface FlowStep {
   id: string;
@@ -28,10 +29,43 @@ interface FlowStepCardProps {
   index: number;
   focused?: boolean;
   onInspect: (step: FlowStep) => void;
+  /** Runtime step status from the active RunRecord — optional */
+  stepStatus?: StepStatus;
 }
 
-export function FlowStepCard({ step, index, focused, onInspect }: FlowStepCardProps) {
+const STATUS_DOT: Record<StepStatus, React.ReactNode> = {
+  idle:         <CircleDot size={8} className="text-muted-foreground/30" />,
+  ready:        <CircleDot size={8} className="text-sky-500" />,
+  running:      <Loader2   size={8} className="text-emerald-500 animate-spin" />,
+  waiting:      <Clock     size={8} className="text-amber-500" />,
+  human_review: <Clock     size={8} className="text-purple-500" />,
+  completed:    <CheckCircle2 size={8} className="text-blue-500" />,
+  failed:       <XCircle   size={8} className="text-destructive" />,
+};
+
+const STATUS_LABEL: Record<StepStatus, string> = {
+  idle:         "idle",
+  ready:        "ready",
+  running:      "running",
+  waiting:      "waiting",
+  human_review: "review",
+  completed:    "done",
+  failed:       "failed",
+};
+
+const STATUS_BORDER: Record<StepStatus, string> = {
+  idle:         "",
+  ready:        "border-sky-500/40",
+  running:      "border-emerald-500/60 shadow-[0_0_0_1px_rgba(16,185,129,0.15)]",
+  waiting:      "border-amber-500/40",
+  human_review: "border-purple-500/40",
+  completed:    "border-blue-500/30",
+  failed:       "border-destructive/40",
+};
+
+export function FlowStepCard({ step, index, focused, onInspect, stepStatus }: FlowStepCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const status: StepStatus = stepStatus ?? "idle";
 
   const hasDetail =
     step.description ||
@@ -47,18 +81,30 @@ export function FlowStepCard({ step, index, focused, onInspect }: FlowStepCardPr
         "min-w-[200px] max-w-[260px] shrink-0",
         focused
           ? "border-[var(--grace-accent)] bg-[var(--grace-accent-muted)] shadow-[0_0_0_2px_var(--grace-accent-muted)]"
-          : "border-border bg-card hover:border-[var(--grace-accent)]/50 hover:bg-card/80",
+          : status !== "idle" && STATUS_BORDER[status]
+            ? `border bg-card ${STATUS_BORDER[status]}`
+            : "border-border bg-card hover:border-[var(--grace-accent)]/50 hover:bg-card/80",
       )}
     >
+      {/* Running pulse overlay */}
+      {status === "running" && (
+        <div className="absolute inset-0 rounded-xl bg-emerald-500/5 pointer-events-none animate-pulse" />
+      )}
+
       {/* Collapsed header */}
       <div className="flex items-start gap-2.5 p-3">
-        {/* Step number badge */}
         <div
           className={cn(
             "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold mt-0.5",
             focused
               ? "border-[var(--grace-accent)] text-[var(--grace-accent)] bg-[var(--grace-accent)]/10"
-              : "border-[var(--grace-accent)]/50 text-[var(--grace-accent)]",
+              : status === "running"
+                ? "border-emerald-500/60 text-emerald-600 bg-emerald-500/10"
+                : status === "completed"
+                  ? "border-blue-500/40 text-blue-600 bg-blue-500/10"
+                  : status === "failed"
+                    ? "border-destructive/40 text-destructive"
+                    : "border-[var(--grace-accent)]/50 text-[var(--grace-accent)]",
           )}
         >
           {index + 1}
@@ -74,14 +120,21 @@ export function FlowStepCard({ step, index, focused, onInspect }: FlowStepCardPr
             )}
           </div>
 
-          {/* Idle status dot */}
           <div className="flex items-center gap-1 mt-1">
-            <CircleDot size={8} className="text-muted-foreground/30" />
-            <span className="text-[10px] text-muted-foreground/40">idle</span>
+            {STATUS_DOT[status]}
+            <span className={cn(
+              "text-[10px]",
+              status === "running"   ? "text-emerald-600" :
+              status === "completed" ? "text-blue-600" :
+              status === "failed"    ? "text-destructive" :
+              status === "waiting" || status === "human_review" ? "text-amber-600" :
+              "text-muted-foreground/40"
+            )}>
+              {STATUS_LABEL[status]}
+            </span>
           </div>
         </div>
 
-        {/* Controls */}
         <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
@@ -116,10 +169,7 @@ export function FlowStepCard({ step, index, focused, onInspect }: FlowStepCardPr
               <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/40 mb-1">Skills</p>
               <div className="flex flex-wrap gap-1">
                 {step.skills.map((s) => (
-                  <span
-                    key={s.id}
-                    className="flex items-center gap-1 rounded border border-[var(--grace-accent)]/20 bg-[var(--grace-accent-muted)] px-1.5 py-0.5 text-[10px] text-[var(--grace-accent)]"
-                  >
+                  <span key={s.id} className="flex items-center gap-1 rounded border border-[var(--grace-accent)]/20 bg-[var(--grace-accent-muted)] px-1.5 py-0.5 text-[10px] text-[var(--grace-accent)]">
                     <Zap size={8} />{s.name}
                   </span>
                 ))}
@@ -132,10 +182,7 @@ export function FlowStepCard({ step, index, focused, onInspect }: FlowStepCardPr
               <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/40 mb-1">Tools</p>
               <div className="flex flex-wrap gap-1">
                 {step.tools.map((t) => (
-                  <span
-                    key={t.id}
-                    className="flex items-center gap-1 rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                  >
+                  <span key={t.id} className="flex items-center gap-1 rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
                     <Wrench size={8} />{t.name}
                   </span>
                 ))}

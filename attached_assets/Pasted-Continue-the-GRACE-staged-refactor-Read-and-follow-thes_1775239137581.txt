@@ -1,0 +1,283 @@
+Continue the GRACE staged refactor. Read and follow these files first:
+
+* docs/product-model.md
+* docs/architecture-plan.md
+* docs/studio-spec.md
+* docs/replit-guardrails.md
+
+This is the next pass after Phase 4.
+Treat it as a combined Studio cleanup + OpenClaw runtime bridge phase.
+
+Do NOT remove backend/runtime/orchestration/adapters.
+Do NOT break provider-agnostic design.
+Do NOT hardcode the product to OpenClaw only, even though OpenClaw is the first live provider.
+Do NOT refactor the full org/tenant model yet.
+
+## Primary goals
+
+1. Clean up and smooth Studio interactions and layout behavior
+2. Introduce a provider abstraction layer
+3. Connect OpenClaw as the first real execution provider
+4. Wire chat and runtime panels to the active instance/run
+5. Start replacing placeholder runtime behavior with real provider-backed behavior where safe
+6. Improve Skills, Tools, Library, and delete/manage actions enough to support real testing
+
+## Critical product rules
+
+* Blueprint cannot run directly
+* Only Instances can run
+* Studio remains instance-centric
+* Studio graph and flow must remain instance-contained
+* Workspace swarm remains outside Studio
+* Provider support must remain future-ready for:
+
+  * OpenClaw
+  * Hermes
+  * Claude
+  * Codex
+  * others later
+* Do not bake provider-specific assumptions into the blueprint/instance schema
+
+## A. Studio cleanup and smoothing
+
+Improve the overall Studio experience.
+
+Requirements:
+
+* smoother transitions between Graph / Flow / Runtime
+* preserve selected node/step focus where sensible when switching views
+* improve drag/reposition behavior in Studio
+* persist node positions for the current instance using a clearly replaceable local persistence layer
+* improve panel behavior so left/right/bottom surfaces feel more intentional and less jumpy
+* keep Studio canvas dominant
+* ensure direct refresh on Studio instance/blueprint routes remains stable
+* fix any remaining routes that fall back to legacy UI
+* make Dashboard / Org / related visible GRACE routes remain inside the GRACE shell or clearly mark them as not yet migrated
+
+## B. Provider abstraction layer
+
+Introduce a clean provider abstraction for runtime connections.
+
+Implement a provider model/service that can support:
+
+* OpenClaw first
+* Hermes later
+* Claude later
+* Codex later
+
+Create a clean provider interface or service layer for:
+
+* connect / configure
+* health check / ping
+* list agents if available
+* start run
+* stream or poll run events
+* send chat/input to active run if supported
+* fetch outputs/artifacts if available
+
+OpenClaw should be the first implementation.
+Other providers can remain typed placeholders but the architecture must clearly support them.
+
+Do not overbuild enterprise tenancy yet.
+
+## C. OpenClaw connection integration
+
+Add a real OpenClaw connection path inside GRACE.
+
+Requirements:
+
+* add or upgrade a connection/settings surface for OpenClaw
+* allow storing connection details in the current phase using the safest existing project pattern
+* support a test connection / health check action
+* if available through the preserved backend/runtime packages, use existing adapter/plumbing instead of reinventing connection logic
+* if real agent listing is available through preserved backend code, expose it; otherwise keep a clearly marked placeholder service boundary
+
+Goal:
+Be able to connect OpenClaw and use it as the first provider for a simple instance test.
+
+## D. Instance run initiation
+
+Enable a real Run action for Instances only.
+
+Requirements:
+
+* Run button appears only for Instances, not Blueprints
+* Run should call the provider abstraction layer
+* OpenClaw should be the first working path
+* store minimal run state associated with the instance
+* update instance status:
+
+  * draft
+  * ready
+  * running
+  * paused
+  * completed
+  * failed
+* expose run status in Studio Runtime tab and console
+
+Do not fake a full execution engine; bridge into the preserved runtime/adapters where possible.
+
+## E. Chat panel integration
+
+Upgrade the right-side chat panel from placeholder to active-instance runtime panel.
+
+Requirements:
+
+* chat is tied to the active instance and its selected/root agent binding
+* if there is no active run, chat should clearly indicate that and support future-prep messaging
+* when a run is active, chat should display:
+
+  * messages/events/output summaries
+  * user input box
+  * placeholder or real send action depending on provider capability
+* if OpenClaw supports sending input or interaction to the active run through existing preserved backend/runtime plumbing, wire it
+* otherwise create a clearly marked integration boundary with TODOs, not fake full conversations
+
+The chat model should remain tied conceptually to the primary agent node.
+
+## F. Runtime tab and bottom console
+
+Replace placeholders with more meaningful real structures.
+
+Runtime tab:
+
+* show run status
+* show basic event timeline
+* show log/event summaries
+* show active provider
+* show active/root agent binding
+* show run identifiers if available
+
+Bottom console tabs:
+
+* Logs
+* Steps
+* Skills
+* Tools
+* Outputs
+* Meta
+* Trace
+
+Wire these tabs to use real or semi-real structured data from the instance/run/provider bridge where possible.
+If some data is not yet available, keep clean placeholders with explicit TODO/integration labels.
+
+## G. Node and step runtime states
+
+Unify runtime states across:
+
+* Flow cards
+* Graph nodes
+* Step Inspector
+* Runtime tab
+* Console
+
+Support statuses like:
+
+* idle
+* ready
+* running
+* waiting
+* human_review
+* completed
+* failed
+
+When a run is active, the visual state model should be ready to reflect real updates.
+Do not overanimate, but make it coherent.
+
+## H. Skills, Tools, and Library cleanup
+
+Move these surfaces from placeholder-only toward usable scaffolds.
+
+Skills:
+
+* add search/sort/view toggle
+* add metadata display
+* add create/delete placeholder flows
+* keep import-source structure
+* prepare for future loading from connected workspaces
+
+Tools:
+
+* same pattern as Skills
+* prepare for real tool registration/import later
+
+Library:
+
+* improve beyond placeholder
+* show artifact/output list structure
+* add categories, metadata, sort/filter/view toggle
+* support future raw file browsing feel
+* if provider/runtime outputs are available from test runs, surface them here
+
+## I. Delete and manage actions
+
+Add safe deletion flows where missing.
+
+Requirements:
+
+* delete Instances
+* delete Workflows/Blueprints from the appropriate library/manage context
+* use confirmation dialog
+* update UI immediately
+* preserve the rule that management actions happen in Workflows/library context, not Studio template preview
+
+## J. Studio node model refinement
+
+Refine the Studio graph model so the primary agent is clearly the root node and the workflow is easier to understand.
+
+Requirements:
+
+* primary/root agent node
+* ordered step nodes
+* skills and tools attached to owning steps
+* optional output/artifact nodes downstream
+* click any node to inspect
+* keep positions movable and persistent
+* ensure both Flow and Graph use the same underlying graph data model
+
+## K. Use preserved code intelligently
+
+Important:
+This repo already contains runtime/adapters/connection patterns from the original system.
+Before adding new code, inspect and reuse preserved backend/runtime/plumbing where practical.
+
+Do not duplicate existing working OpenClaw adapter or run plumbing if it already exists.
+Instead, wrap or translate it into the GRACE provider abstraction cleanly.
+
+## L. Non-goals for this phase
+
+Do NOT fully implement:
+
+* org/workspace tenancy refactor
+* budgets/approvals enforcement
+* shared libraries
+* multi-provider full support beyond OpenClaw-first architecture
+* routines/scheduling
+* billing/invoicing
+* full plugin marketplace
+
+## Deliverables
+
+1. Studio interactions are smoother and more stable
+2. Provider abstraction layer exists
+3. OpenClaw can be configured/tested as first provider
+4. Instances can initiate a real or semi-real run through the provider bridge
+5. Chat panel is tied to active instance/run context
+6. Runtime tab and console are meaningfully upgraded
+7. Skills, Tools, and Library surfaces are improved beyond placeholders
+8. Delete actions exist for instances and workflows
+9. Visible GRACE routes stop falling back into old UI where possible
+10. App still boots and prior product rules remain intact
+
+## At the end
+
+Provide:
+
+1. summary of files created/changed
+2. explanation of provider abstraction design
+3. explanation of how OpenClaw was integrated
+4. explanation of how instance run initiation works
+5. explanation of what chat can do now
+6. explanation of what runtime data is real vs placeholder
+7. list of deferred items for the next phase
+8. note any preserved legacy runtime/adapter code that was reused instead of replaced
