@@ -85,7 +85,7 @@ export function GraceTools() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-dashed border-border bg-card/50 p-8 text-center mb-6">
+      <div className="rounded-lg border border-dashed border-border bg-card p-8 text-center mb-6">
         <Wrench size={28} className="mx-auto mb-3 text-muted-foreground/30" />
         <p className="text-sm font-medium text-muted-foreground">No tools registered yet</p>
         <p className="mt-1 text-xs text-muted-foreground/60">
@@ -101,7 +101,7 @@ export function GraceTools() {
         {IMPORT_SOURCES.map((src) => (
           <div
             key={src.id}
-            className="flex items-start gap-3 rounded-lg border border-border bg-card/50 p-3 opacity-60 cursor-not-allowed"
+            className="flex items-start gap-3 rounded-lg border border-border bg-card p-3 opacity-60 cursor-not-allowed"
             title="Coming in Phase 4"
           >
             <div className="mt-0.5 shrink-0 text-muted-foreground/60">{src.icon}</div>

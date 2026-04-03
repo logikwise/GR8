@@ -56,7 +56,7 @@ export function StepInspector({ step, onClose, className }: StepInspectorProps) 
   return (
     <div
       className={cn(
-        "flex w-64 shrink-0 flex-col border-l border-border bg-card/40 backdrop-blur-sm overflow-y-auto",
+        "flex w-64 shrink-0 flex-col border-l border-border bg-card overflow-y-auto",
         className,
       )}
     >

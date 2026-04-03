@@ -54,7 +54,7 @@ export function GraceWorkspace() {
             />
           </div>
         ) : (
-          <div className="rounded-lg border border-border bg-card/80 backdrop-blur-sm p-6 text-sm text-muted-foreground">
+          <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
             No workspace selected. Create or select a workspace to continue.
           </div>
         )}
@@ -71,7 +71,7 @@ function WorkspaceLink({
   return (
     <Link
       to={to}
-      className="group flex items-start gap-3 rounded-lg border border-border bg-card/70 backdrop-blur-sm p-4 transition-colors hover:border-[var(--grace-accent)] hover:bg-[var(--grace-accent-muted)]"
+      className="group flex items-start gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:border-[var(--grace-accent)] hover:bg-[var(--grace-accent-muted)]"
     >
       <div className="mt-0.5 shrink-0 text-[var(--grace-accent)]">{icon}</div>
       <div>

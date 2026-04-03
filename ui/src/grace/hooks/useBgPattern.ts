@@ -58,6 +58,7 @@ export const BG_PATTERNS: Record<BgPatternKey, PatternDef> = {
       backgroundImage: `url("data:image/svg+xml,${HEX_SVG}")`,
       backgroundSize: "42px 74px",
       backgroundRepeat: "repeat",
+      backgroundAttachment: "fixed",
     },
   },
   dots: {
@@ -68,6 +69,7 @@ export const BG_PATTERNS: Record<BgPatternKey, PatternDef> = {
         "radial-gradient(circle, rgba(128,128,128,0.18) 1px, transparent 1px)",
       backgroundSize: "22px 22px",
       backgroundRepeat: "repeat",
+      backgroundAttachment: "fixed",
     },
   },
   grid: {
@@ -80,6 +82,7 @@ export const BG_PATTERNS: Record<BgPatternKey, PatternDef> = {
       ].join(", "),
       backgroundSize: "20px 20px",
       backgroundRepeat: "repeat",
+      backgroundAttachment: "fixed",
     },
   },
   cross: {
@@ -89,6 +92,7 @@ export const BG_PATTERNS: Record<BgPatternKey, PatternDef> = {
       backgroundImage: `url("data:image/svg+xml,${CROSS_SVG}")`,
       backgroundSize: "20px 20px",
       backgroundRepeat: "repeat",
+      backgroundAttachment: "fixed",
     },
   },
 };

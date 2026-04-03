@@ -41,7 +41,7 @@ export function GraceOutputs() {
 
       <div className="mt-6 grid gap-2 sm:grid-cols-2">
         {["Reports", "JSON / Data", "Files", "Raw Outputs"].map((cat, i) => (
-          <div key={cat} className="rounded-lg border border-border bg-card/40 p-4 opacity-60">
+          <div key={cat} className="rounded-lg border border-border bg-card p-4 opacity-60">
             <div className="flex items-center gap-2 mb-1">
               {[<FileText size={14} />, <FileJson size={14} />, <File size={14} />, <BarChart2 size={14} />][i]}
               <span className="text-sm font-medium text-muted-foreground">{cat}</span>

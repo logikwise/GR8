@@ -43,7 +43,7 @@ function ActiveCard({ link }: { link: QuickLink }) {
   return (
     <Link
       to={link.to}
-      className="group flex items-start gap-3 rounded-lg border border-border bg-card/60 backdrop-blur-sm p-4 transition-colors hover:border-[var(--grace-accent)] hover:bg-[var(--grace-accent-muted)]"
+      className="group flex items-start gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:border-[var(--grace-accent)] hover:bg-[var(--grace-accent-muted)]"
     >
       <div className="mt-0.5 shrink-0 text-[var(--grace-accent)]">{link.icon}</div>
       <div>
@@ -56,7 +56,7 @@ function ActiveCard({ link }: { link: QuickLink }) {
 
 function ComingSoonCard({ link }: { link: QuickLink }) {
   return (
-    <div className="relative flex items-start gap-3 rounded-lg border border-dashed border-border/50 bg-card/30 p-4 opacity-50 cursor-default select-none">
+    <div className="relative flex items-start gap-3 rounded-lg border border-dashed border-border/50 bg-card/50 p-4 opacity-50 cursor-default select-none">
       <div className="mt-0.5 shrink-0 text-muted-foreground/40">{link.icon}</div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">

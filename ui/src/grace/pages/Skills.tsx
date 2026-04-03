@@ -114,7 +114,7 @@ export function GraceSkills() {
         {IMPORT_SOURCES.map((src) => (
           <div
             key={src.id}
-            className="flex items-start gap-3 rounded-lg border border-border bg-card/50 p-3 opacity-60 cursor-not-allowed"
+            className="flex items-start gap-3 rounded-lg border border-border bg-card p-3 opacity-60 cursor-not-allowed"
             title="Coming in Phase 4"
           >
             <div className="mt-0.5 shrink-0 text-muted-foreground/60">{src.icon}</div>
