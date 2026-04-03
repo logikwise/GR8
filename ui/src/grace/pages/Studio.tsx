@@ -23,14 +23,14 @@
  *   - Bottom console: improved structured tabs
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "@/lib/router";
 import {
   Cpu, ArrowLeft, AlertCircle, Layers, FileText, Zap, Wrench,
   CircleDot, ChevronDown, ChevronUp, Terminal, ListChecks,
   MessageSquare, PenLine, PanelLeft, BarChart3, GitBranch,
   Info, ChevronRight, Tag, Calendar, Hash, Clock, PlayCircle,
-  Activity,
+  Activity, GripVertical,
 } from "lucide-react";
 import { blueprintService } from "../blueprints/blueprintService";
 import { instanceService } from "../instances/instanceService";
@@ -42,6 +42,7 @@ import { FlowStepCard } from "../components/FlowStepCard";
 import type { FlowStep } from "../components/FlowStepCard";
 import { StepInspector } from "../components/StepInspector";
 import { GraphCanvas } from "../components/GraphCanvas";
+import type { StudioAgent } from "../components/GraphCanvas";
 
 type StudioMode = "landing" | "blueprint" | "instance";
 type CenterTab = "graph" | "flow" | "runtime";
@@ -88,7 +89,7 @@ function LeftPanel({ mode, blueprint, instance }: {
   mode: StudioMode; blueprint?: Blueprint | null; instance?: Instance | null;
 }) {
   return (
-    <aside className="flex w-52 shrink-0 flex-col border-r border-border bg-card/20 overflow-y-auto">
+    <aside className="flex w-52 shrink-0 flex-col border-r border-border bg-card overflow-y-auto">
       {mode === "blueprint" && blueprint && (
         <>
           <LeftPanelSection title="Blueprint">
@@ -202,7 +203,7 @@ function StudioHeader({
   onBack: () => void; onCreateInstance?: () => void;
 }) {
   return (
-    <div className="shrink-0 border-b border-border px-3 py-2 flex items-center gap-2 bg-card/60">
+    <div className="shrink-0 border-b border-border px-3 py-2 flex items-center gap-2 bg-card">
       <button type="button" onClick={onBack}
         className="flex items-center justify-center w-7 h-7 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
         title="Back">
@@ -282,12 +283,48 @@ function StudioHeader({
 
 // ─── Flow View (horizontal lane) ──────────────────────────────────────────────
 
+// Agent diamond chip shown in the FlowView agent bar
+function AgentChip({ agent }: { agent: StudioAgent }) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 rounded px-2.5 py-1 text-xs select-none",
+        agent.linked
+          ? "border border-[var(--grace-accent)]/60 bg-[var(--grace-accent-muted)] text-[var(--grace-accent)]"
+          : "border border-dashed border-muted-foreground/35 bg-muted/20 text-muted-foreground/60",
+      )}
+    >
+      {/* diamond */}
+      <span
+        className="shrink-0"
+        style={{
+          display: "inline-block",
+          width: 8, height: 8,
+          transform: "rotate(45deg)",
+          border: agent.linked
+            ? "1.5px solid var(--grace-accent)"
+            : "1.5px dashed rgba(150,130,180,0.5)",
+          background: agent.linked
+            ? "rgba(167,139,250,0.15)"
+            : "transparent",
+        }}
+      />
+      <span className="font-medium">{agent.label}</span>
+      <span className={cn("text-[9px]", agent.linked ? "opacity-50" : "opacity-40")}>
+        {agent.linked ? "linked" : "unlinked"}
+      </span>
+    </div>
+  );
+}
+
 function FlowView({
   steps,
+  agents,
   selectedStep,
   onInspect,
 }: {
   steps: FlowStep[];
+  agents: StudioAgent[];
   selectedStep: FlowStep | null;
   onInspect: (step: FlowStep) => void;
 }) {
@@ -302,6 +339,19 @@ function FlowView({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      {/* Agent bar — fixed above the scrollable lane */}
+      <div className="shrink-0 flex items-center gap-2.5 border-b border-border/40 px-5 py-2 bg-card/40">
+        <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/35 shrink-0">
+          Agents
+        </span>
+        {agents.length === 0 ? (
+          <span className="text-[10px] text-muted-foreground/30 italic">No agents configured</span>
+        ) : (
+          agents.map((agent) => <AgentChip key={agent.id} agent={agent} />)
+        )}
+      </div>
+
+      {/* Horizontal step lane */}
       <div className="flex-1 overflow-x-auto overflow-y-auto">
         <div
           className="flex items-start gap-0 px-6 py-8 min-h-full"
@@ -344,7 +394,7 @@ function RuntimeView({ mode, instance }: { mode: StudioMode; instance?: Instance
   return (
     <div className="flex flex-1 flex-col overflow-y-auto p-5 gap-5">
       {/* Status bar */}
-      <div className="rounded-lg border border-border bg-card/60 p-4 flex items-center gap-3">
+      <div className="rounded-lg border border-border bg-card p-4 flex items-center gap-3">
         <div className={cn(
           "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
           status === "running" ? "bg-emerald-500/15" : "bg-muted/40"
@@ -474,13 +524,14 @@ function LandingCanvas() {
 // ─── Center Canvas ─────────────────────────────────────────────────────────────
 
 function CenterCanvas({
-  mode, blueprint, instance, centerTab,
+  mode, blueprint, instance, centerTab, agents,
   selectedStep, onInspect, onInspectorClose,
 }: {
   mode: StudioMode;
   blueprint?: Blueprint | null;
   instance?: Instance | null;
   centerTab: CenterTab;
+  agents: StudioAgent[];
   selectedStep: FlowStep | null;
   onInspect: (step: FlowStep) => void;
   onInspectorClose: () => void;
@@ -516,10 +567,10 @@ function CenterCanvas({
         {/* Main canvas area */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {centerTab === "flow" && (
-            <FlowView steps={steps} selectedStep={selectedStep} onInspect={onInspect} />
+            <FlowView steps={steps} agents={agents} selectedStep={selectedStep} onInspect={onInspect} />
           )}
           {centerTab === "graph" && (
-            <GraphCanvas steps={steps} onStepInspect={onInspect} />
+            <GraphCanvas steps={steps} agents={agents} onStepInspect={onInspect} />
           )}
           {centerTab === "runtime" && (
             <RuntimeView mode={mode} instance={instance} />
@@ -537,10 +588,33 @@ function CenterCanvas({
 
 // ─── Right Panel ───────────────────────────────────────────────────────────────
 
-function RightPanel({ mode }: { mode: StudioMode }) {
+function RightPanel({
+  mode,
+  width,
+  onStartResize,
+}: {
+  mode: StudioMode;
+  width: number;
+  onStartResize: (e: React.MouseEvent) => void;
+}) {
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-l border-border bg-card/20">
-      <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2">
+    <aside
+      className="relative flex shrink-0 flex-col border-l border-border bg-card"
+      style={{ width }}
+    >
+      {/* Drag handle — left edge */}
+      <div
+        onMouseDown={onStartResize}
+        className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize z-10 group flex items-center justify-center hover:bg-[var(--grace-accent)]/20 transition-colors"
+        title="Drag to resize chat panel"
+      >
+        <GripVertical
+          size={12}
+          className="text-muted-foreground/20 group-hover:text-[var(--grace-accent)]/50 transition-colors"
+        />
+      </div>
+
+      <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2 pl-4">
         <MessageSquare size={12} className="text-muted-foreground/60" />
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Chat</p>
         {mode !== "landing" && (
@@ -620,7 +694,7 @@ function BottomPanel({ mode, blueprint, instance }: {
   ];
 
   return (
-    <div className={cn("shrink-0 border-t border-border bg-card/30 flex flex-col transition-all duration-200", open ? "h-44" : "h-8")}>
+    <div className={cn("shrink-0 border-t border-border bg-card flex flex-col transition-all duration-200", open ? "h-44" : "h-8")}>
       <div className="flex items-center gap-0 border-b border-border/60 h-8 shrink-0 px-1 overflow-x-auto">
         {TABS.map((tab) => (
           <button key={tab.id} type="button"
@@ -785,6 +859,10 @@ function BottomPanel({ mode, blueprint, instance }: {
 
 // ─── Root ──────────────────────────────────────────────────────────────────────
 
+const CHAT_MIN = 160;
+const CHAT_MAX = 520;
+const CHAT_DEFAULT = 224;
+
 export function GraceStudio() {
   const { blueprintId, instanceId } = useParams<{ blueprintId?: string; instanceId?: string }>();
   const navigate = useNavigate();
@@ -796,6 +874,7 @@ export function GraceStudio() {
   const [createInstanceOpen, setCreateInstanceOpen] = useState(false);
   const [leftOpen, setLeftOpen] = useState(false);
   const [centerTab, setCenterTab] = useState<CenterTab>("flow");
+  const [chatWidth, setChatWidth] = useState(CHAT_DEFAULT);
 
   // Step inspector state — shared across Flow and Graph
   const [selectedStep, setSelectedStep] = useState<FlowStep | null>(null);
@@ -807,6 +886,59 @@ export function GraceStudio() {
     setCenterTab(tab);
     if (tab === "runtime") setSelectedStep(null);
   }
+
+  // Drag-to-resize chat panel
+  const handleStartChatResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = chatWidth;
+    function onMove(ev: MouseEvent) {
+      // dragging left = startX - ev.clientX > 0 = growing
+      const delta = startX - ev.clientX;
+      setChatWidth(Math.max(CHAT_MIN, Math.min(CHAT_MAX, startWidth + delta)));
+    }
+    function onUp() {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [chatWidth]);
+
+  // Compute studio agents from blueprint or instance
+  const studioAgents: StudioAgent[] = (() => {
+    if (mode === "blueprint" && blueprint) {
+      const agents: StudioAgent[] = [];
+      if (blueprint.agentConfig.primary) {
+        agents.push({
+          id: "primary",
+          label: blueprint.agentConfig.primary.label,
+          role: blueprint.agentConfig.primary.role,
+          linked: false, // blueprint templates never have real adapters linked
+        });
+      }
+      blueprint.agentConfig.specialists?.forEach((sp, i) => {
+        agents.push({
+          id: `specialist-${i}`,
+          label: sp.label,
+          role: sp.role,
+          linked: false,
+        });
+      });
+      return agents;
+    }
+    if (mode === "instance" && instance) {
+      // Build from agentConfig via blueprint snapshot — use agentAssignments for linked status
+      const assignedRoles = new Set(instance.agentAssignments.map((a) => a.role));
+      return instance.agentAssignments.map((a) => ({
+        id: a.agentId || `${a.role}-${a.label}`,
+        label: a.agentName || a.label,
+        role: a.role,
+        linked: assignedRoles.has(a.role) && !!a.agentId,
+      }));
+    }
+    return [];
+  })();
 
   useEffect(() => {
     setInitializing(true);
@@ -879,12 +1011,13 @@ export function GraceStudio() {
         <CenterCanvas
           mode={mode} blueprint={blueprint} instance={instance}
           centerTab={centerTab}
+          agents={studioAgents}
           selectedStep={selectedStep}
           onInspect={(step) => setSelectedStep(step)}
           onInspectorClose={() => setSelectedStep(null)}
         />
 
-        <RightPanel mode={mode} />
+        <RightPanel mode={mode} width={chatWidth} onStartResize={handleStartChatResize} />
       </div>
 
       <BottomPanel mode={mode} blueprint={blueprint} instance={instance} />
