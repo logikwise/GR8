@@ -1,25 +1,26 @@
 /**
- * Connections — Phase 5
+ * Connections — Phase 7
  *
- * Provider configuration and health-check surface.
+ * Provider configuration, health-check, and capability display surface.
  * OpenClaw is the first live provider; others are typed placeholders.
  *
  * Architecture:
  *   Config → localStorage via providerService (replaceable with backend).
- *   Health check → openclawProvider.healthCheck() → /api/health proxy.
- *   Full gateway probe (WebSocket, device-auth) is a Phase 6 server feature
- *   that wraps packages/adapters/openclaw-gateway/src/server/test.ts.
+ *   Health check → openclawProvider.healthCheck() → POST /api/grace/provider/openclaw/probe
+ *     which calls testEnvironment() from packages/adapters/openclaw-gateway/server (real probe).
+ *   Capabilities → ProviderCapabilities per provider (honest status display).
  */
 
 import { useState, useEffect } from "react";
 import {
-  Plug, Wifi, WifiOff, CheckCircle, AlertTriangle, Info,
+  Plug, Wifi, WifiOff, CheckCircle, AlertTriangle,
   ChevronDown, ChevronUp, Loader, X, Save, RefreshCw,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { providerService } from "../providers/providerService";
 import { PROVIDER_LABELS } from "../providers/providerTypes";
-import type { ProviderConfig, ProviderType, ProviderHealthResult } from "../providers/providerTypes";
+import type { ProviderConfig, ProviderType, ProviderHealthResult, ProviderCapabilities } from "../providers/providerTypes";
 
 const PROVIDER_DESCRIPTIONS: Record<ProviderType, string> = {
   openclaw: "WebSocket gateway adapter. Connects GRACE to an OpenClaw agent backend via device-auth. See packages/adapters/openclaw-gateway.",
@@ -27,6 +28,121 @@ const PROVIDER_DESCRIPTIONS: Record<ProviderType, string> = {
   claude:   "Claude (Anthropic) provider — architecture reserved. Uses preserved packages/adapters/claude-local plumbing.",
   codex:    "Codex (OpenAI) provider — architecture reserved. Uses preserved packages/adapters/codex-local plumbing.",
 };
+
+// Per-provider capability declarations — honest about what is actually wired.
+// "live" = working now, "planned" = adapter exists but not yet wired, "none" = not planned
+type CapabilityStatus = "live" | "planned" | "none";
+
+interface CapabilityEntry {
+  key: keyof ProviderCapabilities;
+  label: string;
+  description: string;
+}
+
+const CAPABILITY_ENTRIES: CapabilityEntry[] = [
+  { key: "healthCheck",     label: "Health check",      description: "Test connectivity to the provider" },
+  { key: "runDispatch",     label: "Run dispatch",       description: "Start an agent execution run" },
+  { key: "eventStream",     label: "Event stream",       description: "Real-time events via WebSocket/SSE" },
+  { key: "eventPoll",       label: "Event polling",      description: "Status updates via polling" },
+  { key: "chatInteraction", label: "Interactive chat",   description: "Send messages to an active run" },
+  { key: "agentDiscovery",  label: "Agent discovery",    description: "Enumerate available agents" },
+  { key: "outputListing",   label: "Output listing",     description: "Retrieve artifacts from completed runs" },
+];
+
+const PROVIDER_CAPABILITIES: Record<ProviderType, Record<keyof ProviderCapabilities, CapabilityStatus>> = {
+  openclaw: {
+    healthCheck:     "live",     // POST /api/grace/provider/openclaw/probe — wired Phase 7
+    runDispatch:     "planned",  // Local run record created; gateway execution = Phase 6
+    eventStream:     "planned",  // WebSocket event stream via gateway — Phase 6
+    eventPoll:       "none",     // Not planned
+    chatInteraction: "planned",  // Requires Phase 6 gateway run session
+    agentDiscovery:  "planned",  // Via gateway protocol — Phase 6+
+    outputListing:   "planned",  // Via gateway protocol — Phase 6+
+  },
+  hermes: {
+    healthCheck:     "none",
+    runDispatch:     "none",
+    eventStream:     "none",
+    eventPoll:       "none",
+    chatInteraction: "none",
+    agentDiscovery:  "none",
+    outputListing:   "none",
+  },
+  claude: {
+    healthCheck:     "none",
+    runDispatch:     "none",
+    eventStream:     "none",
+    eventPoll:       "none",
+    chatInteraction: "none",
+    agentDiscovery:  "none",
+    outputListing:   "none",
+  },
+  codex: {
+    healthCheck:     "none",
+    runDispatch:     "none",
+    eventStream:     "none",
+    eventPoll:       "none",
+    chatInteraction: "none",
+    agentDiscovery:  "none",
+    outputListing:   "none",
+  },
+};
+
+function CapabilityMatrix({ providerType }: { providerType: ProviderType }) {
+  const caps = PROVIDER_CAPABILITIES[providerType];
+  return (
+    <div className="rounded-lg border border-border/50 bg-muted/10 p-3 mt-2">
+      <div className="flex items-center gap-1.5 mb-2">
+        <Zap size={11} className="text-muted-foreground/50" />
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">
+          Capabilities
+        </p>
+      </div>
+      <div className="grid grid-cols-1 gap-1">
+        {CAPABILITY_ENTRIES.map(({ key, label, description }) => {
+          const status = caps[key];
+          return (
+            <div key={key} className="flex items-center gap-2" title={description}>
+              <span className={cn(
+                "inline-block w-1.5 h-1.5 rounded-full shrink-0",
+                status === "live"    ? "bg-emerald-500" :
+                status === "planned" ? "bg-amber-400" :
+                "bg-muted-foreground/20",
+              )} />
+              <span className={cn(
+                "text-[10px] flex-1",
+                status === "live"    ? "text-foreground/80" :
+                status === "planned" ? "text-muted-foreground/60" :
+                "text-muted-foreground/30",
+              )}>
+                {label}
+              </span>
+              <span className={cn(
+                "text-[9px] uppercase tracking-wide font-medium shrink-0",
+                status === "live"    ? "text-emerald-600" :
+                status === "planned" ? "text-amber-500/80" :
+                "text-muted-foreground/25",
+              )}>
+                {status === "live" ? "live" : status === "planned" ? "planned" : "—"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-3 mt-2 pt-2 border-t border-border/30">
+        <span className="flex items-center gap-1 text-[9px] text-muted-foreground/40">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" /> Live
+        </span>
+        <span className="flex items-center gap-1 text-[9px] text-muted-foreground/40">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" /> Planned
+        </span>
+        <span className="flex items-center gap-1 text-[9px] text-muted-foreground/40">
+          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/20 inline-block" /> Not planned
+        </span>
+      </div>
+    </div>
+  );
+}
 
 type CheckLevel = "info" | "warn" | "error";
 
@@ -305,19 +421,7 @@ export function GraceConnections() {
 
           {healthResult && <HealthResult result={healthResult} />}
 
-          {/* Phase note */}
-          <div className="rounded-lg border border-border/40 bg-muted/20 p-3 mt-2">
-            <div className="flex items-start gap-2">
-              <Info size={12} className="text-muted-foreground/50 mt-0.5 shrink-0" />
-              <div className="text-[10px] text-muted-foreground/60 leading-relaxed">
-                <strong className="text-muted-foreground">Phase 5 scope:</strong> Config is stored locally.
-                The Test Connection check validates URL format and server reachability.
-                Full WebSocket gateway probe (device-auth, challenge-response) runs server-side
-                via the preserved <code className="bg-muted/40 px-1 rounded">packages/adapters/openclaw-gateway</code> adapter —
-                this is wired in Phase 6.
-              </div>
-            </div>
-          </div>
+          <CapabilityMatrix providerType="openclaw" />
         </div>
       )}
 

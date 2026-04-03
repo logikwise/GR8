@@ -14,6 +14,7 @@
  */
 
 import type { Instance, InstanceStatus } from "./instanceTypes";
+import { runService } from "../providers/runService";
 
 const STORAGE_KEY = "grace.instances.v1";
 
@@ -85,5 +86,6 @@ export const instanceService = {
   remove(id: string): void {
     const instances = load().filter((i) => i.id !== id);
     save(instances);
+    runService.deleteForInstance(id);
   },
 };

@@ -140,55 +140,90 @@ export const openclawProvider: IProvider = {
       };
     }
 
-    // Phase 5: Probe GRACE server reachability as a proxy.
-    // Full gateway WebSocket probe runs server-side via the preserved
-    // openclaw-gateway adapter. That route is deferred to Phase 6.
-    // TODO (Phase 6): call POST /api/grace/provider/openclaw/test instead.
-    const serverCheck: ProviderCheck = await (async () => {
-      try {
-        const res = await fetch("/api/health", { signal: AbortSignal.timeout(4000) });
-        if (res.ok) {
-          return {
-            code: "grace_server_reachable",
-            level: "info" as const,
-            message: "GRACE server is reachable.",
-          };
-        }
+    // Call the real server-side gateway probe via the openclaw-gateway adapter.
+    // Route: POST /api/grace/provider/openclaw/probe (added in Phase 7)
+    // The server uses testEnvironment() from packages/adapters/openclaw-gateway/src/server/test.ts
+    // to perform a real WebSocket connectivity check.
+    try {
+      const res = await fetch("/api/grace/provider/openclaw/probe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: config.gatewayUrl?.trim() ?? "",
+          authToken: config.authToken?.trim() ?? "",
+        }),
+        signal: AbortSignal.timeout(12000),
+      });
+
+      const latencyMs = Date.now() - start;
+
+      if (!res.ok) {
         return {
-          code: "grace_server_error",
-          level: "warn" as const,
-          message: `GRACE server returned status ${res.status}.`,
-        };
-      } catch {
-        return {
-          code: "grace_server_unreachable",
-          level: "warn" as const,
-          message: "GRACE server not reachable — gateway probe skipped.",
-          hint: "Ensure the backend server is running.",
+          ok: false,
+          latencyMs,
+          message: `Probe request failed (HTTP ${res.status}). Check that the GRACE backend is running.`,
+          checks: [
+            ...configChecks,
+            {
+              code: "probe_http_error",
+              level: "error" as const,
+              message: `Server returned HTTP ${res.status}.`,
+              hint: "Ensure the backend server is running.",
+            },
+          ],
+          testedAt: new Date().toISOString(),
         };
       }
-    })();
 
-    const gatewayProbeNote: ProviderCheck = {
-      code: "openclaw_gateway_probe_deferred",
-      level: "info",
-      message: "Gateway WebSocket probe runs server-side (Phase 6 integration).",
-      hint: "The openclaw-gateway adapter is preserved in packages/adapters/openclaw-gateway.",
-    };
+      const probeResult = await res.json() as {
+        status: string;
+        checks: Array<{ code: string; level: string; message: string; hint?: string }>;
+        testedAt: string;
+      };
 
-    const allChecks = [...configChecks, serverCheck, gatewayProbeNote];
-    const latencyMs = Date.now() - start;
-    const hasError = allChecks.some((c) => c.level === "error");
+      const gatewayChecks: ProviderCheck[] = (probeResult.checks ?? []).map((c) => ({
+        code: c.code,
+        level: (c.level === "error" || c.level === "warn" ? c.level : "info") as ProviderCheck["level"],
+        message: c.message,
+        ...(c.hint ? { hint: c.hint } : {}),
+      }));
 
-    return {
-      ok: !hasError,
-      latencyMs,
-      message: hasError
-        ? "Configuration errors found — resolve before connecting."
-        : "Configuration looks valid. Full gateway probe is a Phase 6 feature.",
-      checks: allChecks,
-      testedAt: new Date().toISOString(),
-    };
+      const allChecks: ProviderCheck[] = [...configChecks, ...gatewayChecks];
+      const hasError = probeResult.status === "fail" || allChecks.some((c) => c.level === "error");
+      const hasWarn = probeResult.status === "warn" || allChecks.some((c) => c.level === "warn");
+
+      return {
+        ok: !hasError,
+        latencyMs,
+        message: hasError
+          ? "Gateway probe failed — check configuration and gateway availability."
+          : hasWarn
+          ? "Gateway probe passed with warnings."
+          : "Gateway probe passed — OpenClaw is reachable.",
+        checks: allChecks,
+        testedAt: probeResult.testedAt ?? new Date().toISOString(),
+      };
+    } catch (err) {
+      const latencyMs = Date.now() - start;
+      const isTimeout = err instanceof Error && err.name === "TimeoutError";
+      return {
+        ok: false,
+        latencyMs,
+        message: isTimeout
+          ? "Gateway probe timed out (12s). The backend server may be unreachable."
+          : "Gateway probe request failed. Check that the GRACE backend is running.",
+        checks: [
+          ...configChecks,
+          {
+            code: "probe_fetch_error",
+            level: "error" as const,
+            message: isTimeout ? "Probe timed out after 12 seconds." : "Network error reaching the probe endpoint.",
+            hint: "Ensure the backend server is running on the expected port.",
+          },
+        ],
+        testedAt: new Date().toISOString(),
+      };
+    }
   },
 
   async startRun(config: ProviderConfig, opts: ProviderRunOptions): Promise<ProviderRunResult> {

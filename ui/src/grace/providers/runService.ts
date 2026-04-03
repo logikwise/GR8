@@ -180,4 +180,10 @@ export const runService = {
     runs[idx] = { ...runs[idx], chatMessages };
     save(runs);
   },
+
+  /** Delete all run records belonging to an instance (called on instance delete) */
+  deleteForInstance(instanceId: string): void {
+    const runs = load().filter((r) => r.instanceId !== instanceId);
+    save(runs);
+  },
 };

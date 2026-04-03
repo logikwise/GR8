@@ -420,47 +420,40 @@ function FlowView({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="shrink-0 flex items-center gap-2.5 border-b border-border/40 px-5 py-2 bg-card/40">
-        <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/35 shrink-0">
-          Agents
-        </span>
-        {agents.length === 0 ? (
-          <span className="text-[10px] text-muted-foreground/30 italic">No agents configured</span>
-        ) : (
-          agents.map((agent) => <AgentChip key={agent.id} agent={agent} />)
-        )}
-      </div>
-
-      <div className="flex-1 overflow-x-auto overflow-y-auto">
-        <div
-          className="flex items-start gap-0 px-6 py-8 min-h-full"
-          style={{ width: "max-content", minWidth: "100%" }}
-        >
-          {steps.map((step, i) => (
-            <div key={step.id} className="flex items-center gap-0 shrink-0">
-              <FlowStepCard
-                step={step}
-                index={i}
-                focused={selectedStep?.id === step.id}
-                onInspect={onInspect}
-                stepStatus={getStepStatus(step.id)}
-              />
-              {i < steps.length - 1 && (
-                <div className="flex items-center px-2 shrink-0">
-                  <div className="h-px w-6 bg-gradient-to-r from-[var(--grace-accent)]/40 to-[var(--grace-accent)]/20" />
-                  <ChevronRight size={12} className="text-[var(--grace-accent)]/40 -ml-1.5" />
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {steps.length > 3 && (
-        <div className="shrink-0 flex items-center justify-center py-1.5 border-t border-border/30">
-          <span className="text-[10px] text-muted-foreground/25">scroll horizontally to see all steps</span>
+      {/* Agent strip — only shown when agents are configured */}
+      {agents.length > 0 && (
+        <div className="shrink-0 flex items-center gap-2 border-b border-border/40 px-5 py-1.5 bg-card/30">
+          <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/30 shrink-0">
+            Agents
+          </span>
+          {agents.map((agent) => <AgentChip key={agent.id} agent={agent} />)}
         </div>
       )}
+
+      {/* Flow canvas — centered when content fits, scrollable when it overflows */}
+      <div className="flex-1 overflow-x-auto overflow-y-auto">
+        <div className="flex min-h-full items-center justify-center px-6 py-8">
+          <div className="flex items-center gap-0">
+            {steps.map((step, i) => (
+              <div key={step.id} className="flex items-center gap-0 shrink-0">
+                <FlowStepCard
+                  step={step}
+                  index={i}
+                  focused={selectedStep?.id === step.id}
+                  onInspect={onInspect}
+                  stepStatus={getStepStatus(step.id)}
+                />
+                {i < steps.length - 1 && (
+                  <div className="flex items-center px-2 shrink-0">
+                    <div className="h-px w-6 bg-gradient-to-r from-[var(--grace-accent)]/40 to-[var(--grace-accent)]/20" />
+                    <ChevronRight size={12} className="text-[var(--grace-accent)]/40 -ml-1.5" />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

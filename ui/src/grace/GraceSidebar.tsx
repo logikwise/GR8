@@ -7,7 +7,8 @@
  */
 
 import { useState, useEffect, useRef } from "react";
-import { NavLink, useNavigate, useLocation } from "@/lib/router";
+import { NavLink } from "react-router-dom";
+import { useNavigate, useLocation } from "@/lib/router";
 import {
   Home,
   LayoutDashboard,
