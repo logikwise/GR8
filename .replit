@@ -14,6 +14,9 @@ SERVE_UI = "false"
 PAPERCLIP_MIGRATION_AUTO_APPLY = "true"
 PAPERCLIP_ALLOWED_HOSTNAMES = "e48f7db5-8102-4e3e-900d-8df58cb7c22b-00-3pcdgrnofyoch.worf.replit.dev"
 
+[userenv.shared]
+PAPERCLIP_DEPLOYMENT_MODE = "authenticated"
+
 [workflows]
 runButton = "Project"
 
