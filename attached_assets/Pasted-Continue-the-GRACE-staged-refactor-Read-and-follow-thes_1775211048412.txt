@@ -1,0 +1,268 @@
+Continue the GRACE staged refactor. Read and follow these files first:
+
+* docs/product-model.md
+* docs/architecture-plan.md
+* docs/studio-spec.md
+* docs/replit-guardrails.md
+
+This is Phase 2.
+
+Do NOT build runtime execution yet.
+Do NOT allow blueprint execution.
+Do NOT remove backend/runtime/adapter/platform connection code.
+Do NOT aggressively remove existing concepts that may later support Mission Control, workspace operations, analytics, orchestration visibility, grouped/chained workflows, or portfolio views.
+
+Your task is to implement the Blueprint flat-file system, Workflow Library, and Create Instance flow in a way that fits the current shell but remains modular for later migration into drawer/panel/canvas-oriented layouts.
+
+## Phase 2 goals
+
+1. Add a flat-file Blueprint system with schema/types/validation
+2. Populate the Workflow Library from those Blueprints
+3. Support inspecting a Blueprint and opening it in Studio in template mode
+4. Enforce that Blueprints cannot run
+5. Implement Create Instance flow from a Blueprint
+6. Save a detached Instance snapshot
+7. Show created Instances in the Instances page
+8. Preserve compatibility with the future runtime translation layer
+9. Structure the UI so it can later move from full-page layouts into drawers/panels without major rewrite
+
+## Critical product rules
+
+* Blueprint = reusable template
+* Blueprint cannot run
+* Opening a Blueprint loads it into Studio in template mode
+* User must click Create Instance before anything can execute
+* Create Instance must prompt for:
+
+  * instance name
+  * any configured questions from the workflow file
+  * required agent selection(s) defined by the workflow
+* Instance = detached executable snapshot
+* Blueprint changes later must not mutate existing Instances
+* New Instance default status = draft
+* Studio in this phase is still non-executing; execution comes later
+
+## Important architectural rules
+
+* Preserve backend/runtime/orchestration core
+* Preserve adapter/platform connection plumbing
+* Preserve repurposable concepts that may later support Mission Control or workspace operations
+* Prefer additive implementation over destructive cleanup
+* Do not overfit the implementation to the current full left-nav layout
+* Favor modular components and services that can later be embedded into drawers, overlays, inspectors, or canvas panels
+* Pages are temporary scaffolding; reusable modules/panels/services are the durable architecture
+
+## Implementation requirements
+
+### A. Blueprint flat-file system
+
+Create a clean Blueprint model and file-backed loader.
+
+Implement:
+
+* Blueprint types/interfaces
+* schema validation
+* loader/parser for local flat files
+* at least 1–2 sample Blueprint files
+* clear separation between:
+
+  * blueprint metadata
+  * instance questions/config
+  * agent requirements
+  * steps
+  * skills/tools
+  * outputs/UI metadata
+
+The structure must support:
+
+* single-agent workflows
+* multi-agent workflows
+* future swarm workflows later
+
+A Blueprint should support fields like:
+
+* id
+* name
+* description
+* version
+* workflowType
+* ui metadata
+* instanceConfig.questions
+* agentConfig.primary / specialists
+* steps[]
+* outputs
+
+Please implement the Blueprint system behind a clean service/module layer rather than scattering parsing logic across page components.
+
+### B. Sample blueprint content
+
+Add at least one good sample similar to:
+
+Website Improvement Finder:
+
+* asks location
+* asks number of websites
+* asks whether to pause each step
+* requires a primary research agent
+* has steps for:
+
+  * search businesses
+  * review websites
+  * score opportunities
+  * generate report
+
+The Blueprint should include step names, descriptions, icons, skills, tools, and prompts so it can later feed both graph mode and flow mode in Studio.
+
+### C. Workflow Library page
+
+Upgrade the GRACE Workflow Library page so it:
+
+* lists available Blueprints from the flat-file source
+* shows name, description, workflow type, and step count
+* allows inspect/open
+* does NOT show run/go/play controls
+* clearly indicates Blueprint/template status
+
+Structure the page using reusable library/list/card/detail components where practical so the UI can later move into drawer/canvas patterns.
+
+### D. Blueprint detail / open behavior
+
+When a user opens a Blueprint:
+
+* route into Studio in Blueprint/template mode
+* clearly indicate it is a Blueprint, not an Instance
+* show Create Instance button
+* do not show Run button
+* show a read-only step/flow summary for the Blueprint
+* if practical, include a simple flow preview panel or structured step summary using data from the Blueprint file
+
+Do not implement execution behavior in this phase.
+
+### E. Create Instance flow
+
+Implement a modal, drawer, or wizard that appears from Blueprint/template mode.
+
+It must:
+
+* ask for Instance name
+* render all configured questions from the Blueprint
+* require the user to select the required primary agent and any required specialist agents defined in the Blueprint
+* store the answers/config selections
+* create a detached Instance snapshot
+
+The resulting Instance should include:
+
+* its own id
+* name
+* blueprintId
+* blueprintVersionSource
+* status = draft
+* graphSnapshot or step snapshot derived from the Blueprint
+* configSnapshot from answered questions
+* selected agent assignments
+* empty instanceMemory container for now
+* timestamps if app conventions support them
+
+The implementation should preserve the rule that Instance is independent after creation.
+
+### F. Instances page
+
+Upgrade the GRACE Instances page so it:
+
+* lists created Instances
+* shows status and source Blueprint
+* allows opening an Instance in Studio
+* makes it clear the Instance is executable later, but do not implement execution yet
+
+Use a clean service/store abstraction for instance data rather than tightly coupling it to a single page component.
+
+### G. Studio integration for this phase
+
+Studio must support two contexts:
+
+1. Blueprint/template mode
+
+* no execution controls
+* Create Instance action
+* read-only presentation
+* clear visual indication that the user is viewing a Blueprint template
+
+2. Instance mode
+
+* opened from an existing Instance
+* execution controls can be placeholder/disabled for now
+* display Instance metadata and draft status
+* no actual run wiring yet
+
+Keep Studio’s implementation modular because later it will become a wider canvas-first interface with drawers, inspectors, top controls, and bottom console surfaces.
+
+### H. Persistence and state
+
+Use the cleanest persistence approach that matches the current codebase without conflicting with future backend integration.
+
+Preferred approach:
+
+* isolate Blueprint loading behind a dedicated service/module
+* isolate Instance CRUD behind a dedicated service/module
+* if backend persistence is not yet wired, use a clearly replaceable local persistence layer with TODO markers for future runtime/backend mapping
+
+Do not invent fake backend execution behavior.
+
+### I. UI structure guidance
+
+Even though the current shell uses a full left sidebar, do not hardcode assumptions that this is the final layout.
+Build the Workflow Library, Blueprint detail, Create Instance flow, and Studio template mode with reusable modules that can later be relocated into:
+
+* drawers
+* side panels
+* top bars
+* bottom consoles
+* full-width canvas surfaces
+
+Avoid embedding too much one-off business logic directly into page-level layout files.
+
+### J. Preserve future reuse
+
+Do not remove or flatten concepts that may later support:
+
+* Mission Control
+* workspace-level visibility
+* grouped or chained instances/workflows
+* orchestration analytics
+* cost/trace/log exposure
+* portfolio rollups
+* admin/operations tooling
+
+This phase should extend the product safely, not narrow its future.
+
+### K. Guardrails
+
+* Do not delete or refactor away server/runtime/adapter packages
+* Do not add Run behavior yet
+* Do not allow Blueprints to execute
+* Do not build fake runtime logic that conflicts with real backend logic
+* Keep the code structured so Phase 3 can add Studio graph/flow/chat/console cleanly
+* Preserve app bootability and Phase 1 shell/auth/theme foundation
+
+## Deliverables
+
+1. Blueprint schema/types/loader exist
+2. Workflow Library is populated from Blueprint files
+3. Blueprint opens in Studio template mode
+4. Create Instance flow works
+5. Instances page lists created Instances
+6. New Instance defaults to draft
+7. No Blueprint can run
+8. App still boots and Phase 1 shell/auth remain intact
+9. Components/services are structured for future drawer/canvas migration rather than locked to the current page layout
+
+## At the end
+
+Provide:
+
+1. summary of files created/changed
+2. explanation of how Blueprints are loaded
+3. explanation of how Instances are stored
+4. list of deferred items for Phase 3
+5. note any assumptions made because of existing repo structure
+6. identify any code that was intentionally left modular for future Studio or Mission Control integration

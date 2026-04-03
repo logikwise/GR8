@@ -331,6 +331,8 @@ export function App() {
             <Route path="workspace" element={<GraceWorkspace />} />
             <Route path="library" element={<GraceWorkflowLibrary />} />
             <Route path="studio" element={<GraceStudio />} />
+            <Route path="studio/blueprint/:blueprintId" element={<GraceStudio />} />
+            <Route path="studio/instance/:instanceId" element={<GraceStudio />} />
             <Route path="instances" element={<GraceInstances />} />
             <Route path="skills" element={<GraceSkills />} />
             <Route path="tools" element={<GraceTools />} />
