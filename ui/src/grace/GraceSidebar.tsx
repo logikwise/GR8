@@ -25,11 +25,13 @@ import {
   Moon,
   LogOut,
   Monitor,
+  Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/context/ThemeContext";
 import { authApi } from "@/api/auth";
 import { healthApi } from "@/api/health";
+import { companiesApi } from "@/api/companies";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 
@@ -54,6 +56,25 @@ const BOTTOM_NAV: GraceNavItem[] = [
   { label: "Settings", to: "/grace/settings", icon: <Settings size={16} /> },
   { label: "Admin",    to: "/grace/admin",    icon: <ShieldCheck size={16} /> },
 ];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function initials(name: string | null | undefined, email: string | null | undefined): string {
+  if (name && name.trim()) {
+    const parts = name.trim().split(/\s+/);
+    return parts.length >= 2
+      ? (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase()
+      : name.trim().slice(0, 2).toUpperCase();
+  }
+  if (email) return email.slice(0, 2).toUpperCase();
+  return "??";
+}
+
+function displayName(name: string | null | undefined, email: string | null | undefined): string {
+  if (name && name.trim()) return name.trim();
+  if (email) return email;
+  return "Unknown user";
+}
 
 // ─── Nav link ─────────────────────────────────────────────────────────────────
 
@@ -113,6 +134,27 @@ export function GraceSidebar() {
   const isAuthenticatedMode =
     (health as { deploymentMode?: string } | undefined)?.deploymentMode === "authenticated";
 
+  const { data: session } = useQuery({
+    queryKey: queryKeys.auth.session,
+    queryFn: () => authApi.getSession(),
+    retry: false,
+    staleTime: 5 * 60_000,
+    enabled: isAuthenticatedMode,
+  });
+
+  const { data: companies } = useQuery({
+    queryKey: queryKeys.companies.all,
+    queryFn: () => companiesApi.list(),
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+
+  const user = session?.user ?? null;
+  const company = companies?.[0] ?? null;
+  const userInitials = initials(user?.name, user?.email);
+  const userName = displayName(user?.name, user?.email);
+  const companyName = (company as { name?: string } | null)?.name ?? null;
+
   async function handleSignOut() {
     try { await authApi.signOut(); }
     finally { queryClient.clear(); navigate("/auth"); }
@@ -148,9 +190,7 @@ export function GraceSidebar() {
             </button>
           </>
         )}
-        {collapsed && (
-          <span className="sr-only">GRACE</span>
-        )}
+        {collapsed && <span className="sr-only">GRACE</span>}
       </div>
 
       {/* Expand button (collapsed mode only) */}
@@ -189,43 +229,64 @@ export function GraceSidebar() {
         ))}
       </div>
 
-      {/* Footer (theme + sign out) */}
-      <div
-        className={cn(
-          "border-t border-border shrink-0",
-          collapsed ? "flex flex-col items-center gap-1 py-2" : "px-3 py-3 flex items-center justify-between gap-2"
-        )}
-      >
-        {collapsed ? (
-          <>
+      {/* User identity block */}
+      {collapsed ? (
+        /* Collapsed: avatar circle only */
+        <div className="border-t border-border flex flex-col items-center gap-1 py-2">
+          <div
+            className="flex items-center justify-center w-9 h-9 rounded-full bg-[var(--grace-accent-muted)] text-[var(--grace-accent)] text-xs font-semibold shrink-0 cursor-default select-none"
+            title={companyName ? `${userName} · ${companyName}` : userName}
+          >
+            {userInitials}
+          </div>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="flex items-center justify-center w-9 h-9 rounded text-muted-foreground/60 hover:text-foreground hover:bg-accent transition-colors"
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          >
+            {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+          </button>
+          {isAuthenticatedMode ? (
             <button
               type="button"
-              onClick={toggleTheme}
-              className="flex items-center justify-center w-9 h-9 rounded text-muted-foreground/60 hover:text-foreground hover:bg-accent transition-colors"
-              title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+              onClick={handleSignOut}
+              className="flex items-center justify-center w-9 h-9 rounded text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
+              title="Sign out"
             >
-              {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+              <LogOut size={14} />
             </button>
-            {isAuthenticatedMode ? (
-              <button
-                type="button"
-                onClick={handleSignOut}
-                className="flex items-center justify-center w-9 h-9 rounded text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
-                title="Sign out"
-              >
-                <LogOut size={14} />
-              </button>
-            ) : (
-              <span
-                className="flex items-center justify-center w-9 h-9 text-muted-foreground/30"
-                title="Running in local trusted mode"
-              >
-                <Monitor size={14} />
-              </span>
-            )}
-          </>
-        ) : (
-          <>
+          ) : (
+            <span
+              className="flex items-center justify-center w-9 h-9 text-muted-foreground/30"
+              title="Running in local trusted mode"
+            >
+              <Monitor size={14} />
+            </span>
+          )}
+        </div>
+      ) : (
+        /* Expanded: full user + company block */
+        <div className="border-t border-border shrink-0">
+          {/* User row */}
+          <div className="flex items-center gap-2.5 px-3 py-2.5">
+            <div className="flex items-center justify-center h-7 w-7 rounded-full bg-[var(--grace-accent-muted)] text-[var(--grace-accent)] text-[11px] font-semibold shrink-0 select-none">
+              {userInitials}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-foreground truncate leading-tight">
+                {userName}
+              </p>
+              {companyName && (
+                <p className="text-[11px] text-muted-foreground/70 truncate leading-tight flex items-center gap-1 mt-0.5">
+                  <Building2 size={10} className="shrink-0" />
+                  {companyName}
+                </p>
+              )}
+            </div>
+          </div>
+          {/* Theme + sign out row */}
+          <div className="flex items-center justify-between px-3 pb-2.5 gap-2">
             <button
               type="button"
               onClick={toggleTheme}
@@ -250,9 +311,9 @@ export function GraceSidebar() {
                 Local mode
               </span>
             )}
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
