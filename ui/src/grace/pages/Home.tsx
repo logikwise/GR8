@@ -1,7 +1,6 @@
 import { Link } from "@/lib/router";
 import { Zap, Layers, BookOpen, Cpu, Wrench, FolderOpen, LibraryBig } from "lucide-react";
-import { useBgPattern, BG_PATTERNS, type BgPatternKey } from "../hooks/useBgPattern";
-import { cn } from "@/lib/utils";
+import { PatternPicker } from "../components/PatternPicker";
 
 const QUICK_LINKS = [
   {
@@ -48,97 +47,28 @@ const QUICK_LINKS = [
   },
 ];
 
-// ─── Pattern swatch ────────────────────────────────────────────────────────────
-
-function PatternSwatch({
-  patternKey,
-  active,
-  onClick,
-}: {
-  patternKey: BgPatternKey;
-  active: boolean;
-  onClick: () => void;
-}) {
-  const def = BG_PATTERNS[patternKey];
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={def.hint}
-      className={cn(
-        "flex flex-col items-center gap-1 group transition-colors",
-      )}
-    >
-      {/* Mini pattern preview box */}
-      <div
-        className={cn(
-          "w-8 h-8 rounded border transition-all",
-          active
-            ? "border-[var(--grace-accent)] ring-1 ring-[var(--grace-accent)]"
-            : "border-border hover:border-muted-foreground/50",
-        )}
-        style={{
-          backgroundColor: "var(--background)",
-          ...def.style,
-        }}
-      />
-      <span
-        className={cn(
-          "text-[10px] transition-colors",
-          active ? "text-[var(--grace-accent)] font-medium" : "text-muted-foreground/60 group-hover:text-muted-foreground",
-        )}
-      >
-        {def.label}
-      </span>
-    </button>
-  );
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export function GraceHome() {
-  const { pattern, setPattern } = useBgPattern();
-
   return (
     <div className="min-h-full flex flex-col">
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
       <div className="px-10 pt-16 pb-10">
-        {/* Eyebrow */}
         <p className="text-xs font-medium tracking-[0.2em] uppercase text-[var(--grace-accent)] mb-4 opacity-80">
           Kodavara Platform
         </p>
-
-        {/* Main wordmark */}
         <h1 className="text-6xl font-bold tracking-tight text-foreground leading-none mb-3">
           GRACE
         </h1>
-
-        {/* Acronym line */}
         <p className="text-base text-muted-foreground/70 tracking-wide mb-2">
           G.R.A.C.E. — Generative Runtime Agent Coordination Engine
         </p>
-
-        {/* Tagline */}
         <p className="text-sm text-muted-foreground/50">
           Design, orchestrate, and observe AI agent workflows at any scale.
         </p>
       </div>
 
       {/* ── Pattern picker ────────────────────────────────────────────────── */}
-      <div className="px-10 pb-10 flex items-center gap-4">
-        <span className="text-xs text-muted-foreground/50 shrink-0 tracking-wide">
-          Background
-        </span>
-        <div className="flex items-end gap-3">
-          {(Object.keys(BG_PATTERNS) as BgPatternKey[]).map((key) => (
-            <PatternSwatch
-              key={key}
-              patternKey={key}
-              active={pattern === key}
-              onClick={() => setPattern(key)}
-            />
-          ))}
-        </div>
+      <div className="px-10 pb-10">
+        <PatternPicker />
       </div>
 
       {/* ── Divider ───────────────────────────────────────────────────────── */}
