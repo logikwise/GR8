@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   DocumentRevision,
-  FeedbackDataSharingPreference,
   FeedbackVote,
   FeedbackVoteValue,
   Issue,
@@ -129,8 +128,6 @@ export function IssueDocumentsSection({
   issue,
   canDeleteDocuments,
   feedbackVotes = [],
-  feedbackDataSharingPreference = "prompt",
-  feedbackTermsUrl = null,
   mentions,
   imageUploadHandler,
   onVote,
@@ -139,14 +136,12 @@ export function IssueDocumentsSection({
   issue: Issue;
   canDeleteDocuments: boolean;
   feedbackVotes?: FeedbackVote[];
-  feedbackDataSharingPreference?: FeedbackDataSharingPreference;
-  feedbackTermsUrl?: string | null;
   mentions?: MentionOption[];
   imageUploadHandler?: (file: File) => Promise<string>;
   onVote?: (
     revisionId: string,
     vote: FeedbackVoteValue,
-    options?: { allowSharing?: boolean; reason?: string },
+    options?: { reason?: string },
   ) => Promise<void>;
   extraActions?: ReactNode;
 }) {
@@ -1135,9 +1130,7 @@ export function IssueDocumentsSection({
                   {canVoteOnDocument && doc.latestRevisionId ? (
                     <OutputFeedbackButtons
                       activeVote={feedbackVoteByTargetId.get(doc.latestRevisionId) ?? null}
-                      sharingPreference={feedbackDataSharingPreference}
-                      termsUrl={feedbackTermsUrl}
-                      onVote={(vote: FeedbackVoteValue, options?: { allowSharing?: boolean; reason?: string }) =>
+                      onVote={(vote: FeedbackVoteValue, options?: { reason?: string }) =>
                         onVote?.(doc.latestRevisionId!, vote, options) ?? Promise.resolve()
                       }
                     />

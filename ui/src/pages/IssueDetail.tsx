@@ -108,8 +108,6 @@ const ACTION_LABELS: Record<string, string> = {
   "approval.rejected": "rejected",
 };
 
-const FEEDBACK_TERMS_URL = import.meta.env.VITE_FEEDBACK_TERMS_URL?.trim() || "https://paperclip.ing/tos";
-
 function humanizeValue(value: unknown): string {
   if (typeof value !== "string") return String(value ?? "none");
   return value.replace(/_/g, " ");
@@ -410,7 +408,6 @@ export function IssueDetail() {
     retry: false,
   });
   const keyboardShortcutsEnabled = instanceGeneralSettings?.keyboardShortcuts === true;
-  const feedbackDataSharingPreference = instanceGeneralSettings?.feedbackDataSharingPreference ?? "prompt";
   const { orderedProjects } = useProjectOrder({
     projects: projects ?? [],
     companyId: selectedCompanyId,
@@ -817,15 +814,12 @@ export function IssueDetail() {
       targetId: string;
       vote: "up" | "down";
       reason?: string;
-      allowSharing?: boolean;
-      sharingPreferenceAtSubmit: "allowed" | "not_allowed" | "prompt";
     }) =>
       issuesApi.upsertFeedbackVote(issueId!, {
         targetType: variables.targetType,
         targetId: variables.targetId,
         vote: variables.vote,
         ...(variables.reason ? { reason: variables.reason } : {}),
-        ...(variables.allowSharing ? { allowSharing: true } : {}),
       }),
     onMutate: async (variables) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.issues.feedbackVotes(issueId!) });
@@ -848,19 +842,10 @@ export function IssueDetail() {
       );
       return { previousVotes };
     },
-    onSuccess: (_savedVote, variables) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.feedbackVotes(issueId!) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.instance.generalSettings });
       pushToast({
-        title:
-          variables.sharingPreferenceAtSubmit === "prompt"
-            ? variables.allowSharing
-              ? "Feedback saved. Future votes will share"
-              : "Feedback saved. Future votes will stay local"
-            : variables.allowSharing
-              ? "Feedback saved and sharing enabled"
-              : "Feedback saved",
+        title: "Feedback saved",
         tone: "success",
       });
     },
@@ -1364,8 +1349,6 @@ export function IssueDetail() {
         issue={issue}
         canDeleteDocuments={Boolean(session?.user?.id)}
         feedbackVotes={feedbackVotes}
-        feedbackDataSharingPreference={feedbackDataSharingPreference}
-        feedbackTermsUrl={FEEDBACK_TERMS_URL}
         mentions={mentionOptions}
         imageUploadHandler={async (file) => {
           const attachment = await uploadAttachment.mutateAsync(file);
@@ -1377,8 +1360,6 @@ export function IssueDetail() {
             targetId: revisionId,
             vote,
             reason: options?.reason,
-            allowSharing: options?.allowSharing,
-            sharingPreferenceAtSubmit: feedbackDataSharingPreference,
           });
         }}
         extraActions={!hasAttachments ? attachmentUploadButton : undefined}
@@ -1503,8 +1484,6 @@ export function IssueDetail() {
             comments={timelineComments}
             queuedComments={queuedComments}
             feedbackVotes={feedbackVotes}
-            feedbackDataSharingPreference={feedbackDataSharingPreference}
-            feedbackTermsUrl={FEEDBACK_TERMS_URL}
             linkedRuns={timelineRuns}
             timelineEvents={timelineEvents}
             companyId={issue.companyId}
@@ -1528,8 +1507,6 @@ export function IssueDetail() {
                 targetId: commentId,
                 vote,
                 reason: options?.reason,
-                allowSharing: options?.allowSharing,
-                sharingPreferenceAtSubmit: feedbackDataSharingPreference,
               });
             }}
             onAdd={async (body, reopen, reassignment) => {
