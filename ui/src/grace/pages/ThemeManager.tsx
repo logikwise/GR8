@@ -37,6 +37,8 @@ export function ThemeManager() {
             ? isDark ? "#fb923c" : "#ea580c"
             : t.id === "sage"
             ? isDark ? "#a1a79e" : "#838264"
+            : t.id === "earth"
+            ? isDark ? "#D97706" : "#B45309"
             : isDark ? "#2c9e9e" : "#116466";
           const muted = t.id === "violet"
             ? isDark ? "#1e1535" : "#ede9fe"
@@ -48,6 +50,8 @@ export function ThemeManager() {
             ? isDark ? "#1c0e05" : "#ffedd5"
             : t.id === "sage"
             ? isDark ? "#1a1e1a" : "#e6e3de"
+            : t.id === "earth"
+            ? isDark ? "#451A03" : "#FEF3C7"
             : isDark ? "#0b1515" : "#d1e8e2";
 
           return (

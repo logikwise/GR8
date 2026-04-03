@@ -181,11 +181,14 @@ export function GraceSidebar() {
         )}
       >
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[var(--grace-accent)] text-white text-xs font-bold">
-          G
+          K
         </div>
         {!collapsed && (
           <>
-            <span className="text-sm font-semibold tracking-wide text-foreground">GRACE</span>
+            <div className="flex flex-col leading-none">
+              <span className="text-[11px] font-semibold tracking-widest text-muted-foreground/60 uppercase">Kodavara</span>
+              <span className="text-sm font-bold tracking-wide text-foreground">GRACE</span>
+            </div>
             <button
               type="button"
               onClick={() => setCollapsed(true)}
@@ -196,7 +199,7 @@ export function GraceSidebar() {
             </button>
           </>
         )}
-        {collapsed && <span className="sr-only">GRACE</span>}
+        {collapsed && <span className="sr-only">Kodavara GRACE</span>}
       </div>
 
       {/* Expand button (collapsed mode only) */}

@@ -206,6 +206,78 @@
   --grace-accent-foreground: #ffffff;
 }
 
+/* earth — warm cream content, dark walnut sidebar, amber gold accent */
+:root[data-color-theme="earth"] {
+  --grace-accent: #B45309;
+  --grace-accent-muted: #FEF3C7;
+  --grace-accent-foreground: #ffffff;
+  --background: #F5EFE4;
+  --foreground: #1C140E;
+  --card: #FDFAF5;
+  --card-foreground: #1C140E;
+  --popover: #FDFAF5;
+  --popover-foreground: #1C140E;
+  --primary: #1C140E;
+  --primary-foreground: #F5EFE4;
+  --secondary: #EDE5D8;
+  --secondary-foreground: #1C140E;
+  --muted: #EDE5D8;
+  --muted-foreground: #7A6355;
+  --accent: #E8DDD0;
+  --accent-foreground: #1C140E;
+  --border: #DDD0C0;
+  --input: #DDD0C0;
+  --ring: #B45309;
+  --sidebar: #1C140E;
+  --sidebar-foreground: #F0E8DA;
+  --sidebar-primary: #B45309;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #2C1E12;
+  --sidebar-accent-foreground: #F0E8DA;
+  --sidebar-border: #2C1E12;
+  --sidebar-ring: #B45309;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+}
+.dark[data-color-theme="earth"],
+[data-color-theme="earth"].dark,
+[data-color-theme="earth"] .dark {
+  --grace-accent: #D97706;
+  --grace-accent-muted: #451A03;
+  --grace-accent-foreground: #ffffff;
+  --background: #1A1008;
+  --foreground: #F0E8DA;
+  --card: #231508;
+  --card-foreground: #F0E8DA;
+  --popover: #231508;
+  --popover-foreground: #F0E8DA;
+  --primary: #F0E8DA;
+  --primary-foreground: #1A1008;
+  --secondary: #2C1E12;
+  --secondary-foreground: #F0E8DA;
+  --muted: #2C1E12;
+  --muted-foreground: #A08C78;
+  --accent: #2C1E12;
+  --accent-foreground: #F0E8DA;
+  --border: #3A2818;
+  --input: #3A2818;
+  --ring: #D97706;
+  --sidebar: #140C04;
+  --sidebar-foreground: #F0E8DA;
+  --sidebar-primary: #D97706;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1C1008;
+  --sidebar-accent-foreground: #F0E8DA;
+  --sidebar-border: #1C1008;
+  --sidebar-ring: #D97706;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+}
+
 @layer base {
   * {
     @apply border-border;

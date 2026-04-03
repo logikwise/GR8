@@ -73,8 +73,8 @@ export function GraceHome() {
         <p className="text-xs font-medium tracking-[0.2em] uppercase text-[var(--grace-accent)] mb-4 opacity-80">
           Kodavara Platform
         </p>
-        <h1 className="text-6xl font-bold tracking-tight text-foreground leading-none mb-3">
-          GRACE
+        <h1 className="text-5xl font-bold tracking-tight text-foreground leading-none mb-3">
+          KODAVARA GRACE
         </h1>
         <p className="text-base text-muted-foreground/70 tracking-wide mb-2">
           G.R.A.C.E. — Generative Runtime Agent Coordination Engine

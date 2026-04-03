@@ -17,11 +17,11 @@ export function GraceAbout() {
               className="flex h-10 w-10 items-center justify-center rounded-lg text-white text-lg font-bold"
               style={{ background: "var(--grace-accent)" }}
             >
-              G
+              K
             </div>
             <div>
-              <div className="text-base font-semibold tracking-wide">G.R.A.C.E.</div>
-              <div className="text-xs text-muted-foreground uppercase tracking-widest">by Kodavara</div>
+              <div className="text-[10px] font-semibold tracking-widest text-muted-foreground/60 uppercase">Kodavara</div>
+              <div className="text-base font-bold tracking-wide">GRACE</div>
             </div>
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed">

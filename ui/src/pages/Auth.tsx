@@ -77,14 +77,14 @@ export function AuthPage() {
           <div className="mb-10">
             <div className="flex items-center gap-3 mb-1">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--grace-accent)] text-white text-base font-bold shadow-lg shadow-[var(--grace-accent)]/30">
-                G
+                K
               </div>
               <div>
-                <div className="text-xs font-semibold tracking-[0.25em] text-[var(--grace-accent)] uppercase">
-                  G.R.A.C.E.
+                <div className="text-[10px] font-semibold tracking-widest text-muted-foreground/60 uppercase">
+                  Kodavara
                 </div>
-                <div className="text-[10px] tracking-widest text-muted-foreground uppercase">
-                  by Kodavara
+                <div className="text-sm font-bold tracking-wide text-foreground uppercase">
+                  GRACE
                 </div>
               </div>
             </div>

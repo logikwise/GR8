@@ -4,7 +4,8 @@ export type ColorThemeId =
   | "crimson"
   | "ember"
   | "sage"
-  | "solaris";
+  | "solaris"
+  | "earth";
 
 export interface ColorTheme {
   id: ColorThemeId;
@@ -76,6 +77,16 @@ export const COLOR_THEMES: ColorTheme[] = [
       accent: "#116466",
       muted: "#d1e8e2",
       bg: "#2C3531",
+    },
+  },
+  {
+    id: "earth",
+    name: "Earth",
+    description: "Natural earth tones — warm cream, dark walnut, amber gold",
+    preview: {
+      accent: "#B45309",
+      muted: "#FEF3C7",
+      bg: "#1C140E",
     },
   },
 ];
