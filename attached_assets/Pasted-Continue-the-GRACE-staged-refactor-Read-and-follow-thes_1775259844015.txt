@@ -1,0 +1,296 @@
+Continue the GRACE staged refactor. Read and follow these files first:
+
+* docs/product-model.md
+* docs/architecture-plan.md
+* docs/studio-spec.md
+* docs/replit-guardrails.md
+* docs/legacy-capability-inventory.md
+
+This is the current runtime cleanup + terminology normalization pass.
+
+Primary objectives:
+
+1. Remove or translate remaining Paperclip-era terminology and semantics from runtime payloads, user-facing messages, session metadata, and provider-facing text where safe
+2. Generalize internal/runtime field names instead of replacing them with GRACE-prefixed names, because the app name may change later
+3. Preserve working execution and compatibility while reducing Paperclip bleed-through
+4. Keep the system provider-agnostic and product-name-agnostic at the runtime bridge layer
+5. Continue to support simple real OpenClaw-backed instance testing without breaking the current MVP path
+
+Do NOT remove backend/runtime/orchestration/adapters.
+Do NOT do a blind global search-and-replace.
+Do NOT break working execution just to rename internals.
+Do NOT begin the full org/workspace tenancy refactor yet.
+Do NOT rewrite large unrelated UI sections in this pass.
+
+## Critical product rules
+
+* Blueprints cannot run directly
+* Only Instances can run
+* Studio remains instance-centric
+* Provider capability support must remain honest and granular
+* Runtime bridge internals should be product-name-agnostic where practical
+* User-facing UI may continue to say GRACE where appropriate
+* Internal/runtime/provider fields should not become tightly coupled to the current product name
+
+## Core naming rule
+
+Anything currently prefixed with `Paperclip` or `PAPERCLIP_` should be reviewed and, where safe, generalized to neutral runtime/application terminology rather than renamed to `GRACE_*`.
+
+Preferred direction:
+
+* `APP_RUN_ID`
+* `APP_INSTANCE_ID`
+* `APP_WORKSPACE_ID`
+* `APP_ORG_ID`
+* `APP_AGENT_ID`
+* `APP_PROVIDER`
+* `APP_SESSION_ID`
+* `APP_TRACE_ID`
+* `APP_INPUT_ASSET_IDS`
+* `APP_OUTPUT_TARGET`
+
+If namespaced neutral fields are not practical in a specific preserved compatibility path, use the most neutral non-branded field names possible and document it.
+
+## Main goal
+
+Reduce Paperclip bleed-through while keeping the MVP execution path working.
+
+This means:
+
+* user-facing text should not mention Paperclip unless it is a raw preserved provider log shown intentionally in a trace/diagnostic surface
+* runtime payload wording should reflect workflows, instances, runs, agents, inputs, outputs, and provider execution
+* internal compatibility references may remain only where necessary, but they must be isolated and documented
+
+## A. Inspect all remaining Paperclip references
+
+Search across the relevant runtime/UI/server/provider code paths for references such as:
+
+* Paperclip
+* PAPERCLIP_
+* sessionKey: "paperclip"
+* company/companyId where it should really mean workspace/org
+* wake event language
+* heartbeat-specific wording
+* task wording that does not fit the current product model
+* legacy prompts/messages sent into provider execution
+
+Produce changes carefully rather than blindly replacing every match.
+
+## B. Runtime payload rewrite
+
+Inspect the message/payload being sent into the OpenClaw adapter/runtime path.
+
+Replace preserved Paperclip-specific execution text with neutral runtime language that fits the current model.
+
+The payload wording should be:
+
+* workflow/instance/run oriented
+* provider-neutral where possible
+* explicit about execution context
+* explicit about inputs/outputs/logging expectations
+* free of Paperclip-specific heartbeats/company semantics unless a compatibility path absolutely requires them
+
+Examples of desired language:
+
+* runtime activation event
+* execution request
+* workflow instance context
+* run context
+* workspace context
+* input asset references
+* output reporting instructions
+* runtime status / logs / trace
+
+Do not just rename words. Rewrite the message so it fits the actual product model.
+
+## C. Context/environment variable normalization
+
+Where safe, replace or add neutral context variable names in payloads and runtime bridges.
+
+Preferred fields:
+
+* APP_RUN_ID
+* APP_INSTANCE_ID
+* APP_WORKSPACE_ID
+* APP_ORG_ID
+* APP_AGENT_ID
+* APP_PROVIDER
+* APP_SESSION_ID
+* APP_TRACE_ID
+* APP_INPUT_ASSET_IDS
+* APP_OUTPUT_TARGET
+
+Requirements:
+
+1. Do not introduce GRACE-prefixed internal field names unless the text is purely user-facing
+2. If preserved code still requires legacy PAPERCLIP_* references internally:
+
+   * keep them only in the compatibility layer if absolutely necessary
+   * do not expose them unnecessarily in user-facing logs/messages
+   * document clearly why they remain
+
+If both compatibility and generalized names are needed temporarily, prefer:
+
+* neutral fields in the new bridge layer
+* translation to legacy fields only inside the preserved compatibility boundary
+
+## D. Session key / adapter metadata cleanup
+
+Inspect things like:
+
+* sessionKey values
+* payload field names
+* adapter metadata naming
+* event source labels
+* internal identifiers exposed into logs
+
+If `paperclip` is not required for compatibility, replace it with neutral values.
+If it is required temporarily, isolate it and document it.
+
+Avoid product-branded runtime internals where practical.
+
+## E. User-facing runtime message cleanup
+
+Differentiate between:
+
+1. raw provider logs
+2. GRACE-facing runtime summaries
+
+Requirements:
+
+* main Runtime tab, chat summaries, status banners, and user-facing messages should not surface Paperclip-era language
+* Trace/diagnostic views may still show raw provider output when useful
+* if raw logs include Paperclip references from preserved low-level code, that is acceptable in Trace/diagnostic contexts, but user-facing surfaces should use cleaned summary language
+
+Examples:
+
+* “Run dispatched” is fine
+* “Runtime activation request sent to provider” is fine
+* “Paperclip wake event…” is not acceptable in user-facing runtime summaries
+
+## F. Company terminology cleanup
+
+Inspect payloads/messages that still refer to company/companyId.
+Where this is GRACE-facing or runtime-bridge-facing, update to the chosen neutral term.
+
+Preferred execution context term:
+
+* `workspace`
+
+If a business/governance-level distinction is needed later, org can be added, but for current runtime context prefer workspace.
+
+So for execution context:
+
+* company → workspace
+* companyId → workspaceId or APP_WORKSPACE_ID where safe
+
+## G. Pairing/auth/provider error presentation
+
+Do not remove useful provider troubleshooting details.
+Instead:
+
+* keep the actionable OpenClaw pairing/auth guidance
+* rewrite the summary language into neutral runtime/provider setup wording
+* keep raw provider details in Trace/diagnostics where appropriate
+
+For example:
+
+* Runtime summary should say the provider requires pairing approval
+* Trace can still show the detailed provider response
+* Preserve real troubleshooting value
+
+## H. Keep current MVP path working
+
+Do not break the current simple real instance test path.
+
+After this pass, the user should still be able to:
+
+1. open a workflow
+2. create an instance
+3. configure an OpenClaw connection
+4. click Run
+5. see runtime status/log/output progress
+
+If a rename would risk breaking this path, prefer a compatibility wrapper rather than a broad direct refactor.
+
+## I. Inputs / Outputs naming sanity
+
+Review any places where inputs, outputs, assets, or runtime artifacts are described using inherited Paperclip semantics.
+
+Normalize toward:
+
+* Inputs / Files
+* Outputs / Library
+* assets
+* runtime outputs
+* artifact records
+* run context
+* provider output
+
+Avoid old task/inbox/heartbeat execution wording in the runtime path unless intentionally preserved for future MC features.
+
+## J. Documentation
+
+Create or update a document such as:
+
+* docs/runtime-translation-layer.md
+
+Document:
+
+1. categories of Paperclip-era references found
+2. what was rewritten into neutral terms
+3. what was left in compatibility wrappers and why
+4. what remains raw provider-level output
+5. what still needs future cleanup after MVP
+
+Also add a small naming guide section with the preferred neutral runtime field names.
+
+## K. Non-goals
+
+Do NOT:
+
+* do a full find/replace across the entire repo
+* remove inbox/task routing features preserved for future Mission Control / Recursion reuse
+* do the org/workspace tenancy refactor
+* redesign Studio broadly
+* rewrite unrelated legacy docs/pages unless they directly affect runtime terminology in current GRACE flows
+* convert every trace/debug string if it is intentionally raw provider output
+
+## Deliverables
+
+1. user-facing runtime text is de-Paperclipped where possible
+2. runtime payload wording is rewritten to neutral execution language
+3. internal/runtime/context variable naming is generalized, not GRACE-branded
+4. session/adaptor metadata is cleaned up where safe
+5. raw-vs-clean log separation is clearer
+6. current MVP execution path still works
+7. documentation of the translation/compatibility layer exists
+
+## Final self-audit (REQUIRED)
+
+At the end, provide a strict expectation audit with:
+
+* 👍 = meets expectation
+* ⚠️ = partial / caveated
+* ❌ = not yet met
+
+Audit categories:
+
+* [ ] user-facing Paperclip string cleanup
+* [ ] runtime payload text rewrite
+* [ ] context variable generalization
+* [ ] session/adaptor metadata cleanup
+* [ ] company → workspace terminology cleanup
+* [ ] raw-vs-clean log separation
+* [ ] MVP execution path preserved
+* [ ] compatibility preservation without breakage
+* [ ] no unnecessary product-name coupling introduced
+
+Also include:
+
+1. files changed
+2. categories of references found
+3. what was rewritten vs what was left for compatibility
+4. any unavoidable remaining Paperclip references and why
+5. whether any runtime output still exposes legacy wording and where
+6. deferred cleanup items for a later full terminology pass

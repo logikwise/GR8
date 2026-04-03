@@ -1,31 +1,27 @@
 /**
- * OpenClaw Provider — Phase 5
+ * OpenClaw Provider
  *
- * First concrete implementation of IProvider.
+ * UI-side IProvider implementation for the OpenClaw WebSocket gateway.
  *
  * Connection model:
  *   OpenClaw uses a WebSocket gateway with device-auth (Ed25519).
- *   The gateway probe (testEnvironment) runs server-side via the
- *   @paperclipai/adapter-openclaw-gateway package — see:
- *     packages/adapters/openclaw-gateway/src/server/test.ts
+ *   The adapter package (adapter-openclaw-gateway) handles protocol details
+ *   server-side. This file wraps it at the UI/provider abstraction boundary.
  *
- * For this phase (UI-side abstraction):
- *   - Config is stored in localStorage via providerService.
- *   - healthCheck() does a lightweight server-side ping via
- *     GET /api/health and validates config format locally.
- *   - startRun() creates a local RunRecord immediately and marks the
- *     instance as running. Full gateway execution requires a new
- *     backend route (POST /api/grace/provider/openclaw/run) — deferred.
+ * Runtime bridge:
+ *   - healthCheck()  → POST /api/grace/provider/openclaw/probe (server-side testEnvironment)
+ *   - startRun()     → POST /api/grace/run/dispatch (server-side execute, async)
+ *   - Polling        → GET  /api/grace/run/:runId/poll (Studio polling loop)
+ *   - sendChat()     → not yet implemented (interactive session requires future work)
  *
- * TODO (Phase 6):
- *   - Add POST /api/grace/provider/openclaw/test route that calls
- *     packages/adapters/openclaw-gateway/src/server/test.ts#testEnvironment
- *   - Add POST /api/grace/provider/openclaw/run route that calls
- *     packages/adapters/openclaw-gateway/src/server/execute.ts#execute
- *   - Stream run events back via SSE or WebSocket
+ * Compatibility note:
+ *   The adapter package is published under @paperclipai/adapter-openclaw-gateway.
+ *   "@paperclipai" is the npm publisher scope, not a product coupling.
+ *   Internal PAPERCLIP_* env vars injected by the adapter are in the preserved
+ *   compatibility layer and are not exposed in user-facing runtime surfaces.
+ *   See: docs/runtime-translation-layer.md
  *
- * GRACE-REVIEW: The adapter already exists; this file wraps it at the UI
- * abstraction boundary. Do NOT duplicate gateway protocol logic here.
+ * Do NOT duplicate gateway protocol logic here.
  */
 
 import type {
@@ -293,10 +289,14 @@ export const openclawProvider: IProvider = {
     _runId: string,
     _message: string,
   ): Promise<ProviderSendResult> {
-    // TODO (Phase 6): Send user input to the active gateway run session.
+    // Interactive chat to a running agent session requires streaming/SSE support
+    // on the gateway run connection. Not yet implemented in this provider version.
+    // TODO: Wire POST /api/grace/run/:runId/send once the gateway supports bidirectional sessions.
     return {
       ok: false,
-      message: "Interactive chat input requires Phase 6 gateway integration.",
+      message:
+        "Sending messages to a running agent session is not yet supported. " +
+        "Outputs and logs are available via the Logs tab while the run is active.",
     };
   },
 };
