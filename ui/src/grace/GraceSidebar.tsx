@@ -15,7 +15,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/context/ThemeContext";
 import { authApi } from "@/api/auth";
-import { useQueryClient } from "@tanstack/react-query";
+import { healthApi } from "@/api/health";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 
 interface GraceNavItem {
@@ -64,6 +65,15 @@ export function GraceSidebar() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
+  const { data: health } = useQuery({
+    queryKey: queryKeys.health,
+    queryFn: () => healthApi.get(),
+    retry: false,
+    staleTime: 60_000,
+  });
+
+  const isAuthenticatedMode = (health as { deploymentMode?: string } | undefined)?.deploymentMode === "authenticated";
+
   async function handleSignOut() {
     try {
       await authApi.signOut();
@@ -103,12 +113,21 @@ export function GraceSidebar() {
         >
           {theme === "dark" ? "Light mode" : "Dark mode"}
         </button>
-        <button
-          onClick={handleSignOut}
-          className="text-xs text-muted-foreground hover:text-destructive transition-colors"
-        >
-          Sign out
-        </button>
+        {isAuthenticatedMode ? (
+          <button
+            onClick={handleSignOut}
+            className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+          >
+            Sign out
+          </button>
+        ) : (
+          <span
+            className="text-xs text-muted-foreground/50 cursor-default"
+            title="Running in local trusted mode — no authentication required"
+          >
+            Local mode
+          </span>
+        )}
       </div>
     </aside>
   );
