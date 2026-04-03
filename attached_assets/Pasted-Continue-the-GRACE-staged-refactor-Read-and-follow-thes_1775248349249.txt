@@ -1,0 +1,318 @@
+Continue the GRACE staged refactor. Read and follow these files first:
+
+* docs/product-model.md
+* docs/architecture-plan.md
+* docs/studio-spec.md
+* docs/replit-guardrails.md
+
+This is the next pass after Phase 6.
+
+Primary objective:
+
+1. Fix route persistence and refresh behavior so GRACE routes stay in GRACE and return users to where they were
+2. Do a lightweight Studio cleanup to resolve the remaining structural issues that affect testing
+3. Focus primarily on the deferred OpenClaw integration work so blueprint → instance → run can be tested with real data
+4. Preserve provider-agnostic architecture for future Hermes / Claude / Codex support
+
+Do NOT remove backend/runtime/orchestration/adapters.
+Do NOT begin the full org/workspace tenancy refactor yet.
+Do NOT fake provider capabilities that are not actually supported.
+Do NOT overbuild Mission Control in this pass.
+
+## Primary success criteria
+
+By the end of this pass:
+
+* refreshing on any active GRACE route should return the user to that GRACE route, not the base/legacy system
+* Dashboard and Org should remain stable inside GRACE
+* Studio should be slightly cleaner and more correct structurally
+* OpenClaw deferred items should move meaningfully forward using preserved backend/runtime/adapter code
+* blueprint → instance → run should be closer to a truthful end-to-end path
+
+## Critical product rules
+
+* Blueprint cannot run directly
+* Only Instances can run
+* Studio remains instance-centric
+* Studio graph and flow remain instance-contained
+* Workspace swarm remains outside Studio
+* A healthy provider connection does not imply all runtime capabilities are available
+* Provider health, run dispatch, event streaming, chat interaction, agent discovery, and output listing are separate capabilities
+* No core user-managed GRACE asset may exist only in in-memory module state
+
+## A. Highest priority: route persistence and refresh stability
+
+This is the most important item in this phase.
+
+Problem:
+Refreshing the browser can still return the user to the base system or lose the current GRACE route/context.
+
+Fix this comprehensively.
+
+Requirements:
+
+1. Direct refresh on GRACE routes must remain on the same GRACE route:
+
+   * /grace/dashboard
+   * /grace/org
+   * /grace/workflows
+   * /grace/instances
+   * /grace/studio/blueprint/:blueprintId
+   * /grace/studio/instance/:instanceId
+   * /grace/connections
+   * skills/tools/library pages
+2. GRACE route refresh must not silently fall back to the base/legacy app shell
+3. Auth guards must preserve the intended destination and restore the user to the correct GRACE route after auth resolution
+4. Any remaining top-level nav links in GRACE must stay inside GRACE or be clearly wrapped/labeled if not yet migrated
+5. If legacy route behavior is still interfering, isolate it so GRACE shell routing is authoritative for GRACE pages
+
+Please explicitly identify the root cause of the refresh issue and fix it properly rather than layering more temporary redirects.
+
+## B. Lightweight Studio cleanup
+
+Keep this limited and focused.
+
+Requirements:
+
+1. Remove or reduce any remaining structural mismatch that hurts testing:
+
+   * agents should move closer to being node-native rather than living as a separate strip
+   * if full strip removal is too large for this pass, at minimum align the top agent display with the graph structure and reduce duplication/confusion
+2. Improve workflow centering:
+
+   * loaded flow/graph should visually center better in the available canvas
+   * avoid the “workflow pasted into a corner with empty dead space” feel
+   * preserve calm graph behavior
+3. Keep graph interaction calm:
+
+   * selecting a node must not reheat the whole graph
+   * dragging should remain local and subtle
+4. Preserve StepInspector reuse and do not duplicate inspector logic
+5. Do not turn this into a full graph library migration if that would block OpenClaw work in this pass
+
+Goal:
+Lightweight Studio improvement, not a major Studio rebuild.
+
+## C. OpenClaw deferred items — main focus
+
+This is the main functional focus of the phase.
+
+Use preserved runtime/backend/adapter code first, especially anything related to:
+
+* packages/adapters/openclaw-gateway
+* existing runtime services
+* run/session/event plumbing
+* connection/auth logic
+
+Do not duplicate working adapter logic if it already exists.
+
+### C1. Real OpenClaw dispatch
+
+Move openclawProvider beyond local/semi-local run initiation where possible.
+
+Requirements:
+
+* inspect preserved backend/runtime code and wire a real dispatch path where practical
+* if a server route is needed, add the minimal GRACE-specific backend route needed rather than building parallel runtime logic in the UI
+* map an Instance into the minimum viable payload required by the preserved OpenClaw path
+* capture and persist returned identifiers if available:
+
+  * provider run id
+  * session id
+  * agent id
+  * trace id
+* associate returned runtime ids with the GRACE RunRecord
+
+If some provider-backed fields are unavailable, keep them optional and clearly document the gap.
+
+### C2. Real or semi-real runtime event ingestion
+
+Improve runtime truthfulness using actual provider events/logs where possible.
+
+Requirements:
+
+* ingest run start / running / completion / error events if available
+* ingest step progress if available
+* ingest log lines or summaries if available
+* ingest trace/meta ids if available
+* persist them through the RunRecord/event model
+* wire them into:
+
+  * Runtime tab
+  * Logs
+  * Steps
+  * Outputs
+  * Meta
+  * Trace
+
+Clearly distinguish:
+
+* provider-backed data
+* inferred/local fallback data
+* unavailable data
+
+### C3. Chat tied to actual run capability
+
+Improve the right-side chat panel so it reflects actual provider capability.
+
+Requirements:
+
+* chat must always know:
+
+  * active instance
+  * active run
+  * active provider
+  * primary/root agent binding if available
+* if OpenClaw supports interactive messaging through preserved code, wire it
+* if not, clearly show capability-limited behavior
+* do not present fake bidirectional provider chat
+
+If chat to provider is not available yet, the panel should still:
+
+* show structured run messages/events
+* show system status
+* show outputs or review items when available
+* make the capability limitation explicit
+
+### C4. Agent discovery
+
+If preserved OpenClaw code can expose agents, begin using it.
+
+Requirements:
+
+* add capability-aware agent discovery support in the provider layer
+* if available, surface discovered agents in:
+
+  * Connections
+  * instance binding where practical
+  * Studio agent/root node details
+* if full discovery is not available yet, keep the current future-ready binding structure and document the gap honestly
+
+### C5. Outputs and Library hookup
+
+If provider execution returns outputs/artifacts/meta references:
+
+* surface them in the Runtime tab and Outputs tab
+* persist them via a Library/output service layer
+* show source/provider metadata where available
+* make Library feel like the destination for actual outputs, not just a placeholder bucket
+
+Do not keep returned outputs only in temporary runtime memory.
+
+## D. Instance and run cleanup behavior
+
+Tighten cleanup and lifecycle behavior.
+
+Requirements:
+
+1. Deleting an instance should appropriately clean up associated run records or mark them clearly as orphaned if preservation is intentional
+2. Run lifecycle should be coherent across:
+
+   * instance cards/status
+   * Studio header
+   * graph/flow nodes
+   * Runtime tab
+   * console tabs
+3. Refreshing during or after a run should restore the correct GRACE page context and associated run/instance state where possible
+
+## E. Provider capability model usage
+
+Use the existing ProviderCapabilities model actively in the UI and runtime logic.
+
+Capabilities to respect:
+
+* healthCheck
+* runDispatch
+* eventStream
+* eventPoll
+* chatInteraction
+* agentDiscovery
+* outputListing
+
+The UI should honestly reflect current provider capability state instead of assuming everything is supported.
+
+## F. Skill / Tool / Workflow asset persistence sanity
+
+Do a quick verification and cleanup pass on asset persistence.
+
+Requirements:
+
+* ensure Skills, Tools, and Workflows all use legitimate persisted service-layer storage
+* ensure create / duplicate / edit / delete flows persist across refresh
+* ensure deep-linking to a Workflow/Blueprint in Studio still works after refresh
+* do not reintroduce in-memory-only source-of-truth patterns
+
+This is a sanity pass, not a full redesign.
+
+## G. Dashboard and Org stability
+
+Dashboard and Org should remain in GRACE and not break routing.
+
+Requirements:
+
+* stable GRACE-native pages
+* no redirects to old/base system
+* safe placeholders/scaffolds are fine
+* preserve room for future Mission Control / org hierarchy later
+
+## H. Non-goals
+
+Do NOT fully implement:
+
+* org/workspace tenancy refactor
+* budgets/approvals enforcement
+* billing/invoicing
+* shared libraries
+* full multi-provider support beyond OpenClaw-first architecture
+* routines/scheduling
+* full Mission Control portfolio layer
+* major Studio graph library migration unless absolutely necessary for the refresh/OpenClaw work
+
+## Deliverables
+
+1. Refresh and deep-link behavior is fixed for GRACE routes
+2. GRACE routes no longer drop the user back into the base system
+3. Studio is lightly cleaned up and visually more coherent
+4. OpenClaw integration moves forward using preserved adapter/runtime/backend code
+5. Runtime data becomes more truthful where provider data is available
+6. Chat honestly reflects real provider capability state
+7. Agent discovery is started if supported, or the limitation is clearly implemented
+8. Outputs/Library begin receiving real or semi-real run data where available
+9. Instance deletion and associated run cleanup are more coherent
+10. App still boots and prior persistence rules remain intact
+
+## Final self-audit (REQUIRED)
+
+At the end, provide a strict expectation audit with:
+
+* 👍 = meets expectation
+* ⚠️ = partial / caveated
+* ❌ = not yet met
+
+Audit categories:
+
+* [ ] GRACE refresh/deep-link stability
+* [ ] No base-system fallback from GRACE routes
+* [ ] Dashboard stability
+* [ ] Org stability
+* [ ] Lightweight Studio cleanup
+* [ ] OpenClaw dispatch progress
+* [ ] Runtime event/log truthfulness
+* [ ] Chat capability honesty
+* [ ] Agent discovery progress
+* [ ] Outputs/Library hookup progress
+* [ ] Instance/run cleanup coherence
+* [ ] No in-memory-only core asset storage
+* [ ] Provider-agnostic architecture preserved
+
+Also include:
+
+1. summary of files created/changed
+2. explanation of the refresh-routing root cause and how it was fixed
+3. explanation of what preserved OpenClaw code paths were reused
+4. explanation of what OpenClaw capabilities are now truly live vs still partial
+5. explanation of how run dispatch works now
+6. explanation of how runtime events/logs are ingested now
+7. explanation of any Studio cleanup completed in this pass
+8. list of deferred items for the next phase
+9. note any remaining provider or routing limitations
