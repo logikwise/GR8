@@ -111,7 +111,7 @@ export function ManageBlueprintModal({ blueprint: initialBlueprint, open, onClos
   function handleDuplicate() {
     const dup: Blueprint = {
       ...draft,
-      id: `${draft.id}-copy-${Date.now().toString(36)}`,
+      id: `bp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
       name: `${draft.name} (Copy)`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
