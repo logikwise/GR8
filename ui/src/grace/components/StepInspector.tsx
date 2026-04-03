@@ -8,12 +8,14 @@
  * Rendered as a fixed-width right drawer inside the Studio center panel.
  */
 
-import { X, Zap, Wrench, FileText, CircleDot, Terminal } from "lucide-react";
+import { X, Zap, Wrench, FileText, CircleDot, Terminal, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FlowStep } from "./FlowStepCard";
 
 interface StepInspectorProps {
   step: FlowStep | null;
+  /** 0-based index of the step in the current steps array */
+  stepIndex?: number;
   onClose: () => void;
   className?: string;
 }
@@ -50,8 +52,10 @@ function Chip({
   );
 }
 
-export function StepInspector({ step, onClose, className }: StepInspectorProps) {
+export function StepInspector({ step, stepIndex, onClose, className }: StepInspectorProps) {
   if (!step) return null;
+
+  const stepNum = stepIndex !== undefined ? stepIndex + 1 : null;
 
   return (
     <div
@@ -61,15 +65,30 @@ export function StepInspector({ step, onClose, className }: StepInspectorProps) 
       )}
     >
       {/* Header */}
-      <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2 shrink-0">
-        <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[var(--grace-accent)]/50 text-[9px] font-bold text-[var(--grace-accent)]">
-          S
+      <div className="flex items-start gap-2.5 border-b border-border/60 px-3 py-2.5 shrink-0">
+        {/* Step number badge */}
+        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[var(--grace-accent)]/50 text-[10px] font-bold text-[var(--grace-accent)] mt-0.5">
+          {stepNum ?? "·"}
         </div>
-        <p className="flex-1 text-xs font-medium truncate">{step.name}</p>
+
+        {/* Title block */}
+        <div className="flex-1 min-w-0">
+          <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/40 leading-none mb-0.5">
+            {stepNum ? `Step ${stepNum}` : "Step"}
+          </p>
+          <p className="text-xs font-semibold leading-snug truncate">{step.name}</p>
+          {step.agentRole && (
+            <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground/60">
+              <User size={9} className="shrink-0" />
+              <span className="capitalize truncate">{step.agentRole}</span>
+            </div>
+          )}
+        </div>
+
         <button
           type="button"
           onClick={onClose}
-          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground/50 hover:text-foreground hover:bg-accent/40 transition-colors"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground/50 hover:text-foreground hover:bg-accent/40 transition-colors mt-0.5"
         >
           <X size={12} />
         </button>
@@ -84,16 +103,6 @@ export function StepInspector({ step, onClose, className }: StepInspectorProps) 
             <span className="text-xs text-muted-foreground/50">idle — no active run</span>
           </div>
         </div>
-
-        {/* Agent role */}
-        {step.agentRole && (
-          <div>
-            <SectionLabel>Agent Role</SectionLabel>
-            <span className="inline-block rounded bg-muted/60 px-2 py-0.5 text-xs text-muted-foreground capitalize">
-              {step.agentRole}
-            </span>
-          </div>
-        )}
 
         {/* Description */}
         {step.description && (

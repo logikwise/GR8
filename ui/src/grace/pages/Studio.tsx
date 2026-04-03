@@ -716,7 +716,11 @@ function CenterCanvas({
         </div>
 
         {selectedStep && (
-          <StepInspector step={selectedStep} onClose={onInspectorClose} />
+          <StepInspector
+            step={selectedStep}
+            stepIndex={steps.findIndex((s) => s.id === selectedStep.id)}
+            onClose={onInspectorClose}
+          />
         )}
       </div>
     </div>
