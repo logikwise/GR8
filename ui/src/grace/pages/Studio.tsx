@@ -711,17 +711,17 @@ function WorkflowInfoCard({
       neutral: "border-border/60 bg-card text-muted-foreground/70 cursor-default",
       violet:  onClick
         ? "border-violet-500/30 bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 cursor-pointer"
-        : "border-violet-500/20 bg-violet-500/8 text-violet-400/70 cursor-default",
+        : "border-violet-500/20 bg-violet-500/10 text-violet-400/70 cursor-default",
       amber:   onClick
         ? "border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 cursor-pointer"
-        : "border-amber-500/20 bg-amber-500/8 text-amber-400/70 cursor-default",
+        : "border-amber-500/20 bg-amber-500/10 text-amber-400/70 cursor-default",
     };
     return (
       <button
         type="button"
         onClick={onClick}
         className={cn(
-          "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors leading-tight truncate",
+          "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors leading-tight whitespace-nowrap self-start",
           colors[tone],
         )}
       >
@@ -730,19 +730,13 @@ function WorkflowInfoCard({
     );
   }
 
-  function Section({
-    label, items, tab, tone = "neutral", grid,
-  }: { label: string; items: string[]; tab?: BottomTab; tone?: PillTone; grid?: boolean }) {
+  function AgentSection({ items }: { items: string[] }) {
     if (items.length === 0) return null;
     return (
       <div className="space-y-1.5">
-        <p className="text-[9px] tracking-[0.15em] uppercase text-muted-foreground/40 font-medium">
-          {label}
-        </p>
-        <div className={cn(grid ? "grid grid-cols-2 gap-1" : "flex flex-wrap gap-1.5")}>
-          {items.map((item) => (
-            <Pill key={item} label={item} tone={tone} onClick={tab ? () => onOpenTab?.(tab) : undefined} />
-          ))}
+        <p className="text-[9px] tracking-[0.15em] uppercase text-muted-foreground/40 font-medium">Agents</p>
+        <div className="flex flex-wrap gap-1.5">
+          {items.map((item) => <Pill key={item} label={item} tone="neutral" />)}
         </div>
       </div>
     );
@@ -751,7 +745,7 @@ function WorkflowInfoCard({
   return (
     <div className={cn(
       "rounded-xl border border-border/60 bg-card/95 backdrop-blur-md shadow-2xl overflow-hidden transition-all duration-200",
-      expanded ? "w-96" : "w-72",
+      expanded ? "w-[420px]" : "w-72",
     )}>
       {/* ── Collapsed header (always visible) ── */}
       <div className="p-4 pb-3">
@@ -795,27 +789,32 @@ function WorkflowInfoCard({
       {/* ── Expanded content ── */}
       {expanded && (
         <div className="px-4 pb-4 border-t border-border/30 pt-3 space-y-3">
-          {/* Agent + skill + tool sections */}
-          <Section
-            label="Agents"
-            items={usedAgents.map((a) => a.label)}
-            tab={undefined}
-            tone="neutral"
-          />
-          <Section
-            label="Skills"
-            items={allSkills.map((s) => s.name)}
-            tab="skills"
-            tone="violet"
-            grid
-          />
-          <Section
-            label="Tools"
-            items={allTools.map((t) => t.name)}
-            tab="tools"
-            tone="amber"
-            grid
-          />
+          {/* Agents */}
+          <AgentSection items={usedAgents.map((a) => a.label)} />
+
+          {/* Skills (col 1) + Tools (col 2) side-by-side */}
+          {(allSkills.length > 0 || allTools.length > 0) && (
+            <div className="grid grid-cols-2 gap-3 items-start">
+              {/* Skills column */}
+              <div className="space-y-1.5">
+                <p className="text-[9px] tracking-[0.15em] uppercase text-muted-foreground/40 font-medium">Skills</p>
+                <div className="flex flex-col gap-1 items-start">
+                  {allSkills.map((s) => (
+                    <Pill key={s.id} label={s.name} tone="violet" onClick={() => onOpenTab?.("skills")} />
+                  ))}
+                </div>
+              </div>
+              {/* Tools column */}
+              <div className="space-y-1.5">
+                <p className="text-[9px] tracking-[0.15em] uppercase text-muted-foreground/40 font-medium">Tools</p>
+                <div className="flex flex-col gap-1 items-start">
+                  {allTools.map((t) => (
+                    <Pill key={t.id} label={t.name} tone="amber" onClick={() => onOpenTab?.("tools")} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Footer row */}
           <div className="pt-2 border-t border-border/40 flex items-center justify-between">
