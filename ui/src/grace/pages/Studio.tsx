@@ -690,10 +690,12 @@ function WorkflowInfoCard({
     steps.flatMap((s) => s.tools ?? []).map((t) => [t.id, t])
   ).values()];
 
-  const usedAgentIds = [...new Set(steps.map((s) => s.agentId).filter(Boolean))];
-  const usedAgents = usedAgentIds
-    .map((id) => agents.find((a) => a.id === id))
-    .filter(Boolean) as StudioAgent[];
+  // Derive agents referenced by steps via agentRole matching
+  const usedRoles = [...new Set(steps.map((s) => s.agentRole).filter(Boolean) as string[])];
+  const usedAgents = usedRoles
+    .map((role) => agents.find(
+      (a) => a.role === role || a.label.toLowerCase() === role.toLowerCase(),
+    ) ?? { id: role, label: role, role, linked: false });
 
   const categoryLabel = mode === "blueprint" ? "BLUEPRINT" : "WORKFLOW";
   const version = blueprint?.version;
@@ -776,7 +778,7 @@ function WorkflowInfoCard({
       <div className="space-y-3">
         <Section
           label="Agents"
-          items={usedAgents.map((a) => a.name)}
+          items={usedAgents.map((a) => a.label)}
           tab={undefined}
         />
         <Section
@@ -1528,11 +1530,6 @@ export function GraceStudio() {
   const [entryOpen, setEntryOpen] = useState(true);
   const [newBlueprintOpen, setNewBlueprintOpen] = useState(false);
 
-  // Re-open entry modal whenever user lands back on /grace/studio
-  useEffect(() => {
-    if (mode === "landing") setEntryOpen(true);
-  }, [mode]);
-
   // Run state
   const [runRecord, setRunRecord] = useState<RunRecord | null>(null);
   const [runStarting, setRunStarting] = useState(false);
@@ -1554,6 +1551,11 @@ export function GraceStudio() {
 
   const mode: StudioMode = blueprintId ? "blueprint" : instanceId ? "instance" : "landing";
   const providerConnected = providerService.isConnected();
+
+  // Re-open entry modal whenever user navigates back to /grace/studio (landing)
+  useEffect(() => {
+    if (mode === "landing") setEntryOpen(true);
+  }, [mode]);
 
   function handleCenterTab(tab: CenterTab) {
     setCenterTab(tab);
