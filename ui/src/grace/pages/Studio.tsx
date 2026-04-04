@@ -46,8 +46,11 @@ import { cn } from "@/lib/utils";
 import { FlowStepCard } from "../components/FlowStepCard";
 import type { FlowStep } from "../components/FlowStepCard";
 import { StepInspector } from "../components/StepInspector";
-import { GraphCanvas } from "../components/GraphCanvas";
+import { FlowCanvas } from "../components/FlowCanvas";
+import type { StepStatusMap } from "../components/FlowCanvas";
 import type { StudioAgent } from "../components/GraphCanvas";
+import { outputService } from "../outputs/outputService";
+import { inputService } from "../inputs/inputService";
 
 type StudioMode = "landing" | "blueprint" | "instance";
 type CenterTab = "graph" | "flow" | "runtime";
@@ -676,6 +679,8 @@ function CenterCanvas({
   onInspectorClose: () => void;
   runRecord: RunRecord | null;
 }) {
+  const [infoPanelOpen, setInfoPanelOpen] = useState(false);
+
   if (mode === "landing") return <LandingCanvas />;
 
   const steps: FlowStep[] =
@@ -690,6 +695,16 @@ function CenterCanvas({
         }))
       : [];
 
+  // Step status map for live node coloring in FlowCanvas
+  const stepStatuses: StepStatusMap = {};
+  for (const sr of runRecord?.steps ?? []) {
+    stepStatuses[sr.stepId] = sr.status;
+  }
+
+  const infoName = mode === "blueprint" ? blueprint?.name : instance?.name;
+  const infoDesc = mode === "blueprint" ? blueprint?.description : instance?.blueprintName;
+  const infoSteps = steps.length;
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden min-w-0">
       {mode === "blueprint" && (
@@ -702,18 +717,69 @@ function CenterCanvas({
         </div>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
         <div className="flex flex-1 flex-col overflow-hidden">
           {centerTab === "flow" && (
             <FlowView steps={steps} agents={agents} selectedStep={selectedStep} onInspect={onInspect} runRecord={runRecord} />
           )}
           {centerTab === "graph" && (
-            <GraphCanvas steps={steps} agents={agents} onStepInspect={onInspect} />
+            <div className="flex-1 overflow-hidden relative" style={{ height: "100%" }}>
+              <FlowCanvas
+                steps={steps}
+                agents={agents}
+                stepStatuses={stepStatuses}
+                onStepInspect={onInspect}
+              />
+            </div>
           )}
           {centerTab === "runtime" && (
             <RuntimeView mode={mode} instance={instance} runRecord={runRecord} />
           )}
         </div>
+
+        {/* Floating workflow info panel (graph + flow tabs) */}
+        {(centerTab === "graph" || centerTab === "flow") && infoName && (
+          <div className="absolute top-3 left-3 z-20">
+            {infoPanelOpen ? (
+              <div className="rounded-lg border border-border bg-card/90 backdrop-blur shadow-lg p-3 w-52">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    {mode === "blueprint"
+                      ? <PenLine size={11} className="text-[var(--grace-accent)]" />
+                      : <Cpu size={11} className="text-[var(--grace-accent)]" />}
+                    <span className="text-xs font-semibold truncate">{infoName}</span>
+                  </div>
+                  <button type="button" onClick={() => setInfoPanelOpen(false)}
+                    className="text-muted-foreground/40 hover:text-muted-foreground transition-colors">
+                    <ChevronUp size={11} />
+                  </button>
+                </div>
+                {infoDesc && (
+                  <p className="text-[10px] text-muted-foreground leading-relaxed mb-2 line-clamp-3">
+                    {infoDesc}
+                  </p>
+                )}
+                <div className="flex items-center gap-3 text-[10px] text-muted-foreground/60">
+                  <span className="flex items-center gap-1">
+                    <ListChecks size={9} /> {infoSteps} step{infoSteps !== 1 ? "s" : ""}
+                  </span>
+                  {mode === "blueprint" && blueprint?.version && (
+                    <span className="flex items-center gap-1">
+                      <GitBranch size={9} /> v{blueprint.version}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setInfoPanelOpen(true)}
+                className="flex items-center gap-1.5 rounded-lg border border-border bg-card/80 backdrop-blur px-2.5 py-1.5 text-[10px] text-muted-foreground hover:text-foreground hover:border-[var(--grace-accent)]/40 transition-colors shadow-md">
+                <Info size={10} />
+                <span className="font-medium truncate max-w-28">{infoName}</span>
+                <ChevronDown size={9} className="text-muted-foreground/50" />
+              </button>
+            )}
+          </div>
+        )}
 
         {selectedStep && (
           <StepInspector
@@ -1333,6 +1399,17 @@ export function GraceStudio() {
                 message: `Provider reported: ${data.errorMessage}`,
               });
             }
+            // Persist a run completion output record to grace.outputs.v1
+            if (data.status === "completed" && instance) {
+              outputService.addFromRun({
+                runId: runRecord.id,
+                instanceId: instance.id,
+                instanceName: instance.name,
+                type: "text",
+                label: `${instance.name} — run output`,
+                content: `Run completed at ${new Date().toISOString()}. Logs available in Studio.`,
+              });
+            }
             if (!cancelled) setRunRecord(runService.getById(runRecord.id));
           }
           if (!cancelled && instanceId && instance) {
@@ -1368,11 +1445,16 @@ export function GraceStudio() {
     const active = providerService.getActive();
     if (!active) { setRunStarting(false); return; }
 
+    // Collect input asset IDs attached to this instance
+    const inputAssets = inputService.getForInstance(instance.id);
+    const inputAssetIds = inputAssets.map((a) => a.id);
+
     const result = await active.provider.startRun(active.config, {
       instanceId: instance.id,
       instanceName: instance.name,
       steps: instance.graphSnapshot.map((s) => ({ id: s.id, name: s.name })),
       agentAssignments: instance.agentAssignments,
+      inputAssetIds,
     });
 
     const run = runService.createRun({
@@ -1427,11 +1509,10 @@ export function GraceStudio() {
       tag: "USER",
       message: `User message: ${msg.slice(0, 80)}${msg.length > 80 ? "…" : ""}`,
     });
-    // TODO (Phase 6): Send to provider via active.provider.sendChat()
-    // For now, append a system response noting the limitation
+    // Append a system response noting the current capability boundary
     runService.appendChatMessage(runRecord.id, {
       role: "system",
-      content: "Message recorded. Interactive chat relay to the OpenClaw agent requires Phase 6 gateway integration.",
+      content: "Message recorded. Sending messages to a running agent session is not yet supported — logs and outputs are available in the panel below.",
     });
     setRunRecord(runService.getById(runRecord.id));
   }

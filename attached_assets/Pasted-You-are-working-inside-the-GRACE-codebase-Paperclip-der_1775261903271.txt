@@ -1,0 +1,391 @@
+You are working inside the GRACE codebase (Paperclip-derived system with a neutral runtime layer already implemented).
+
+Your goal for this phase is to **complete a simple, real, end-to-end OpenClaw-backed workflow run inside Studio**, while upgrading the Studio UX to a **true draggable canvas (not horizontal scroll)**.
+
+This is NOT a redesign phase.
+This is a **functionality + usability completion phase**.
+
+---
+
+# 🎯 PHASE OBJECTIVES
+
+## PRIMARY GOAL
+
+A user can:
+
+1. Open a workflow
+2. Create an instance
+3. Attach inputs (optional)
+4. Click **Start Run**
+5. See:
+
+   * steps progress
+   * logs streaming (via polling)
+   * outputs generated
+6. Refresh the page and still see everything intact
+
+---
+
+## CRITICAL UX FIX (MANDATORY)
+
+### ❗ Replace horizontal scrolling workflow with DRAGGABLE CANVAS
+
+Current problem:
+
+* Workflow steps are laid out horizontally
+* Requires scrolling
+* Breaks with >2 steps
+* Not usable
+
+### REQUIRED BEHAVIOR
+
+Implement a **true canvas system**:
+
+#### Canvas behavior:
+
+* Click + drag anywhere → pan canvas
+* Mouse wheel / trackpad → zoom in/out
+* Fit-to-view on load
+* Nodes positioned freely (not locked in row)
+* Nodes remain where user drags them
+* No snapping entire graph on interaction
+
+#### Node behavior:
+
+* Each step = draggable node
+* Agent(s) = node(s)
+* Skills/tools optionally rendered as child or linked nodes
+* Clicking a node:
+
+  * opens Step Inspector (right panel)
+  * does NOT reset graph physics
+
+#### Layout:
+
+* Initial auto layout (simple):
+
+  * left-to-right or radial
+* After that:
+
+  * user-controlled positioning
+
+---
+
+## IMPLEMENTATION REQUIREMENT
+
+Replace current custom canvas with:
+
+### ✅ React Flow (reactflow)
+
+Use:
+
+* `useNodesState`
+* `useEdgesState`
+* `fitView`
+* `MiniMap`
+* `Controls`
+* `Background` (dots/grid)
+
+Custom node types:
+
+* StepNode
+* AgentNode
+* SkillNode
+* ToolNode
+
+Color system (already defined, reuse):
+
+* agent: #3b82f6
+* skill: #8b5cf6
+* tool: #f59e0b
+* artifact: #22c55e
+
+Edges:
+
+* stroke: #475569
+* animated when active (future hook)
+
+---
+
+# ⚙️ RUNTIME COMPLETION (OPENCLAW)
+
+## 1. COMPLETE RUN LOOP
+
+Ensure full flow works:
+
+### Dispatch
+
+POST /api/grace/run/dispatch
+
+### Polling (already exists)
+
+GET /api/grace/run/:runId/poll
+
+### Studio behavior:
+
+* Start Run → dispatch
+* Poll every 2–3 seconds
+* Update:
+
+  * step status
+  * logs
+  * outputs
+
+---
+
+## 2. STEP STATUS SYNC
+
+Map poll response to:
+
+* idle
+* running
+* complete
+* failed
+
+Update:
+
+* node color
+* node border
+* node pulse animation (running)
+
+---
+
+## 3. LOG STREAM DISPLAY
+
+Runtime tab + bottom Logs tab:
+
+Show:
+
+* GRACE system messages
+* provider logs
+* error messages
+
+Do NOT rewrite provider stdout — show raw.
+
+---
+
+## 4. INPUTS → RUN CONTEXT
+
+Implement:
+
+### InputsPanel → run dispatch
+
+Pass:
+
+```
+APP_INPUT_ASSET_IDS: string[]
+```
+
+If files uploaded:
+
+* store locally (for now)
+* assign IDs
+* attach to run payload
+
+Display in Studio:
+
+* Inputs tab
+* visible during run
+
+---
+
+## 5. OUTPUTS → LIBRARY
+
+When poll returns outputs:
+
+* persist to:
+  localStorage (grace.outputs.v1)
+
+Each output:
+
+* id
+* runId
+* stepId
+* type (json, file, image, link)
+* timestamp
+
+Update:
+
+* Outputs tab
+* Library page
+
+---
+
+# 🧠 STUDIO UX IMPROVEMENTS
+
+## 1. AGENT AS NODE (IMPORTANT)
+
+Remove visual "agent strip" at top.
+
+Instead:
+
+* render agent(s) as nodes in graph
+* connect:
+  agent → first step
+
+---
+
+## 2. WORKFLOW INFO PANEL (FLOATING)
+
+Add floating panel in Studio:
+
+Shows:
+
+* workflow name
+* description
+* "View workflow.md"
+
+Click → opens modal with markdown
+
+---
+
+## 3. STEP QUICK INFO (NO PANEL REQUIRED)
+
+When clicking step node:
+
+Show inline (or popover):
+
+* skills
+* tools
+* prompt (if exists)
+
+Full detail still in right panel.
+
+---
+
+## 4. CHAT IMPROVEMENTS
+
+Chat panel should:
+
+* show run messages
+* allow input during run (if enabled later)
+* support:
+
+### Future-ready:
+
+* links to outputs
+* "Open in Library" buttons
+* "Upload file" shortcut
+
+---
+
+## 5. INPUTS TAB (NEW TAB)
+
+Add to bottom tabs:
+
+Tabs:
+
+* Logs
+* Steps
+* Skills
+* Tools
+* Inputs ✅ NEW
+* Outputs
+* Meta
+* Trace
+
+Inputs tab:
+
+* drag & drop
+* list uploaded assets
+* show IDs used in run
+
+---
+
+# 🧱 PERSISTENCE (NO MEMORY-ONLY DATA)
+
+Ensure ALL of these persist:
+
+* Blueprints → localStorage
+* Instances → localStorage
+* Runs → localStorage
+* Skills → localStorage
+* Tools → localStorage
+* Outputs → localStorage
+* Inputs (metadata at least) → localStorage
+
+NO core entity should reset on refresh.
+
+---
+
+# 🧹 CLEANUP REQUIREMENTS
+
+## 1. REMOVE PAPERCLIP UI LEFTOVERS
+
+Search and eliminate:
+
+* routes still pointing to legacy UI
+* broken links (dashboard/org/task inbox)
+* any visible "Paperclip" references
+
+---
+
+## 2. TERMINOLOGY
+
+Keep neutral:
+
+* "run dispatch" is acceptable internally
+* UI should prefer:
+
+  * "Start Run"
+  * "Runtime"
+  * "Execution"
+
+---
+
+# 🧪 SUCCESS CRITERIA
+
+You should be able to:
+
+1. Open workflow
+2. Create instance
+3. Upload input (optional)
+4. Click Start Run
+5. See:
+
+   * graph nodes update live
+   * logs populate
+   * outputs generated
+6. Refresh page
+7. Everything still exists and renders correctly
+
+---
+
+# 🚫 DO NOT
+
+* Do NOT rewrite adapter internals
+* Do NOT remove PAPERCLIP_* env vars
+* Do NOT refactor provider system yet
+* Do NOT introduce backend dependencies beyond current pattern
+
+---
+
+# 🧭 NOTES
+
+This phase is about:
+
+* making the system **actually usable**
+* not just architecturally correct
+
+The Studio must feel:
+
+* fluid
+* interactive
+* controllable
+
+NOT:
+
+* rigid
+* scroll-based
+* locked layout
+
+---
+
+# END STATE
+
+After this phase:
+
+* Studio = real interactive canvas
+* Workflows = usable beyond trivial cases
+* OpenClaw runs = functional end-to-end
+* System = ready for real-world testing

@@ -140,7 +140,7 @@ function ImportBlueprintModal({ open, onClose }: { open: boolean; onClose: () =>
           <Button variant="outline" size="sm" onClick={handleClose}>Cancel</Button>
           <Button size="sm" disabled={!canImport}
             style={{ background: canImport ? "var(--grace-accent)" : undefined, color: canImport ? "var(--grace-accent-foreground)" : undefined }}
-            onClick={() => setError("Blueprint import is not yet wired — paste/file parsing coming in Phase 4.")}>
+            onClick={() => setError("Blueprint import is not yet wired — paste/file parsing coming soon.")}>
             Import Blueprint
           </Button>
         </div>

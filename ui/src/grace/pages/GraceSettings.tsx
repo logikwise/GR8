@@ -120,7 +120,7 @@ export function GraceSettings() {
           <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/40 flex items-center gap-2">
             System
             <span className="rounded border border-border px-1.5 py-px text-[9px] font-normal text-muted-foreground/50">
-              opens outside GRACE shell — migration in Phase 9
+              opens outside GRACE shell — legacy
             </span>
           </p>
           <div className="space-y-2">

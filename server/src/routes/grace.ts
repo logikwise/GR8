@@ -120,6 +120,7 @@ export function graceRoutes(): Router {
       instanceId?: unknown;
       instanceName?: unknown;
       task?: unknown;
+      inputAssetIds?: unknown;
     };
 
     const url = typeof body.url === "string" ? body.url.trim() : "";
@@ -130,9 +131,12 @@ export function graceRoutes(): Router {
       return;
     }
 
-    const instanceId   = typeof body.instanceId   === "string" ? body.instanceId   : "default-instance";
-    const instanceName = typeof body.instanceName  === "string" ? body.instanceName : "Workflow Instance";
-    const task         = typeof body.task          === "string" ? body.task         : "Execute workflow";
+    const instanceId    = typeof body.instanceId   === "string" ? body.instanceId   : "default-instance";
+    const instanceName  = typeof body.instanceName  === "string" ? body.instanceName : "Workflow Instance";
+    const task          = typeof body.task          === "string" ? body.task         : "Execute workflow";
+    const inputAssetIds = Array.isArray(body.inputAssetIds)
+      ? (body.inputAssetIds as unknown[]).filter((x): x is string => typeof x === "string")
+      : [];
 
     const runId     = randomUUID();
     const startedAt = new Date().toISOString();
@@ -193,6 +197,7 @@ export function graceRoutes(): Router {
             APP_WORKSPACE_ID: "default",
             APP_TRACE_ID: runId,
             APP_PROVIDER: "openclaw",
+            APP_INPUT_ASSET_IDS: inputAssetIds.join(","),
           },
           onLog: async (stream, chunk) => {
             appendEvent(state, stream as "stdout" | "stderr", chunk);

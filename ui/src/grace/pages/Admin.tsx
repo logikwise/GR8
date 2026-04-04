@@ -32,9 +32,9 @@ export function GraceAdmin() {
       </div>
 
       <div className="mt-6 rounded-lg border border-border bg-card p-4">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Phase 1 Note</p>
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Admin</p>
         <p className="text-sm text-muted-foreground">
-          Admin functionality will be wired to instance-level management APIs in a future phase. For now, use the
+          Admin management APIs are coming soon. For now, use the
           Settings page for available configuration options.
         </p>
       </div>

@@ -69,6 +69,8 @@ export interface ProviderRunOptions {
   steps: Array<{ id: string; name: string }>;
   /** Assigned agents from the instance */
   agentAssignments?: Array<{ role: string; agentId: string; agentName: string }>;
+  /** Input asset IDs attached to this instance — forwarded as APP_INPUT_ASSET_IDS in context */
+  inputAssetIds?: string[];
 }
 
 export interface ProviderRunResult {

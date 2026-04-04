@@ -244,7 +244,8 @@ export const openclawProvider: IProvider = {
           authToken: config.authToken?.trim() ?? "",
           instanceId: opts.instanceId,
           instanceName: opts.instanceName ?? opts.instanceId,
-          task: opts.steps?.map((s) => s.name).join(" → ") ?? "Execute GRACE workflow",
+          task: opts.steps?.map((s) => s.name).join(" → ") ?? "Execute workflow",
+          inputAssetIds: opts.inputAssetIds ?? [],
         }),
         signal: AbortSignal.timeout(10000),
       });

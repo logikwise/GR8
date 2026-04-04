@@ -144,7 +144,7 @@ export function GraceLibrary() {
           </p>
         </div>
         <button type="button"
-          title="Coming in Phase 6"
+          title="Coming soon"
           className="flex items-center gap-1.5 rounded border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground/40 cursor-not-allowed opacity-50">
           <Plus size={12} /> Add Resource
         </button>
@@ -186,7 +186,7 @@ export function GraceLibrary() {
       <div className="mt-8">
         <div className="flex items-center gap-2 mb-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/50">Add to Library</p>
-          <span className="text-[10px] rounded bg-muted/60 px-1.5 py-0.5 text-muted-foreground">Phase 6</span>
+          <span className="text-[10px] rounded bg-muted/60 px-1.5 py-0.5 text-muted-foreground">Coming soon</span>
         </div>
         <div className="grid gap-2 sm:grid-cols-3">
           {[
@@ -196,7 +196,7 @@ export function GraceLibrary() {
           ].map((item) => (
             <div key={item.label}
               className="flex items-start gap-3 rounded-lg border border-dashed border-border bg-card/40 p-3 opacity-50 cursor-not-allowed"
-              title="Coming in Phase 6">
+              title="Coming soon">
               <div className="text-muted-foreground/40 mt-0.5">{item.icon}</div>
               <div>
                 <div className="text-xs font-medium text-muted-foreground">{item.label}</div>
@@ -210,7 +210,7 @@ export function GraceLibrary() {
       <ConfirmDialog
         open={!!deleteTarget}
         title="Remove from Library"
-        description={`Remove "${deleteTarget?.name ?? "this resource"}" from the library? (Local change in Phase 5.)`}
+        description={`Remove "${deleteTarget?.name ?? "this resource"}" from the library?`}
         confirmLabel="Remove"
         variant="warning"
         onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
