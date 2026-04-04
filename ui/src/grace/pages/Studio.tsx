@@ -955,6 +955,7 @@ function CenterCanvas({
                 stepStatuses={stepStatuses}
                 onStepInspect={handleStepInspect}
                 onAgentInspect={handleAgentInspect}
+                activeStepId={selectedStep?.id}
                 activeSkillId={activeSkillId}
                 activeToolId={activeToolId}
               />

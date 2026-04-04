@@ -54,6 +54,8 @@ interface FlowCanvasProps {
   stepStatuses?: StepStatusMap;
   onStepInspect?: (step: FlowStep) => void;
   onAgentInspect?: (agent: StudioAgent) => void;
+  /** Step ID whose inspector is currently open — scopes dot expansion */
+  activeStepId?: string | null;
   /** Skill ID to highlight/expand in canvas (from inspector) */
   activeSkillId?: string | null;
   /** Tool ID to highlight/expand in canvas (from inspector) */
@@ -536,7 +538,7 @@ const BTN: React.CSSProperties = {
 
 function FlowCanvasInner({
   steps, agents, stepStatuses = {}, onStepInspect, onAgentInspect,
-  activeSkillId, activeToolId,
+  activeStepId, activeSkillId, activeToolId,
 }: FlowCanvasProps) {
   const { fitView } = useReactFlow();
   const [showMinimap, setShowMinimap] = useState(false);
@@ -591,13 +593,22 @@ function FlowCanvasInner({
   }, [JSON.stringify(stepStatuses)]);
 
   // ── Sync activeSkillId / activeToolId into node data ──────────────────────
+  // Only expand the dot on the specific step that's open in the inspector.
   useEffect(() => {
     setNodes((prev) => prev.map((node) => {
       if (node.type !== "stepNode") return node;
-      return { ...node, data: { ...node.data, activeSkillId, activeToolId } };
+      const isActive = !activeStepId || node.id === activeStepId;
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          activeSkillId: isActive ? activeSkillId : null,
+          activeToolId:  isActive ? activeToolId  : null,
+        },
+      };
     }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSkillId, activeToolId]);
+  }, [activeStepId, activeSkillId, activeToolId]);
 
   // ── Spring gravity RAF loop ────────────────────────────────────────────────
   useEffect(() => {
