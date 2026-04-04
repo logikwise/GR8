@@ -1216,16 +1216,30 @@ function BottomPanel({
 }) {
 
   const bpSteps = blueprint?.steps ?? [];
-  const instSteps = instance?.graphSnapshot ?? [];
-  const steps = mode === "blueprint" ? bpSteps : mode === "instance" ? instSteps : [];
 
-  const allSkills = mode === "blueprint"
-    ? [...new Map(bpSteps.flatMap((s) => s.skills ?? []).map((s) => [s.id, s])).values()]
+  // For instances, hydrate each snapshot step with skills/tools from the source blueprint
+  // if the snapshot predates those fields (same logic as WorkflowInfoCard / FlowCanvas).
+  const hydratedInstSteps = (instance?.graphSnapshot ?? []).map((s) => {
+    const bpStep = bpSteps.find((bs) => bs.id === s.id || bs.name === s.name);
+    return {
+      ...s,
+      skills: s.skills?.length ? s.skills : (bpStep?.skills ?? []),
+      tools:  s.tools?.length  ? s.tools  : (bpStep?.tools  ?? []),
+    };
+  });
+
+  const steps = mode === "blueprint" ? bpSteps
+    : mode === "instance" ? hydratedInstSteps
     : [];
-  const allTools = mode === "blueprint"
-    ? [...new Map(bpSteps.flatMap((s) => s.tools ?? []).map((t) => [t.id, t])).values()]
-    : [];
-  const outputs = mode === "blueprint" ? (blueprint?.outputs ?? []) : [];
+
+  // Derive unified skill/tool lists (deduped by id)
+  const allSkills = [...new Map(
+    steps.flatMap((s) => s.skills ?? []).map((s) => [s.id, s])
+  ).values()];
+  const allTools = [...new Map(
+    steps.flatMap((s) => s.tools ?? []).map((t) => [t.id, t])
+  ).values()];
+  const outputs = blueprint?.outputs ?? [];
 
   const ALL_TABS: { id: BottomTab; label: string; icon: React.ReactNode; instanceOnly?: boolean }[] = [
     { id: "logs",    label: "Logs",    icon: <Terminal   size={11} />, instanceOnly: true  },
@@ -1735,6 +1749,11 @@ export function GraceStudio() {
       const inst = instanceService.getById(instanceId);
       if (inst) {
         setInstance(inst);
+        // Also load the source blueprint so BottomPanel, inspector, and
+        // FlowCanvas all have access to blueprint-level data (skills, tools,
+        // outputs, agent config) even when the instance snapshot predates those fields.
+        const srcBp = blueprintService.getById(inst.blueprintId);
+        if (srcBp) setBlueprint(srcBp);
         const latestRun = runService.getLatestRun(instanceId);
         if (latestRun) setRunRecord(latestRun);
       } else {
