@@ -18,6 +18,7 @@ export interface FlowStep {
   name: string;
   description?: string;
   agentRole?: string;
+  icon?: string;
   skills?: { id: string; name: string }[];
   tools?: { id: string; name: string }[];
   prompt?: string;

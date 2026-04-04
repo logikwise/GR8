@@ -34,7 +34,12 @@ import ReactFlow, {
   ReactFlowProvider,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { AlignHorizontalDistributeCenter, Map } from "lucide-react";
+import {
+  AlignHorizontalDistributeCenter, Map,
+  Search, BarChart2, FileText, Download, Globe, Send, Play,
+  Cpu, Layers, AlignLeft, Calendar, Workflow, ScanSearch,
+  Zap, Wrench, PenLine, CheckCircle2, Star, Database, Filter,
+} from "lucide-react";
 import type { FlowStep } from "./FlowStepCard";
 import type { StudioAgent } from "./GraphCanvas";
 import type { StepStatus } from "../providers/providerTypes";
@@ -98,6 +103,40 @@ function hexToRgb(hex: string): string {
 
 function trunc(s: string, max = 13): string {
   return s.length > max ? s.slice(0, max - 1) + "…" : s;
+}
+
+/** Derive a lucide icon for a step based on its name/role keywords */
+function StepIcon({ step, color }: { step: FlowStep; color: string }) {
+  // If the blueprint/step provided an explicit emoji icon, render it
+  if (step.icon && /\p{Emoji}/u.test(step.icon)) {
+    return <span style={{ fontSize: 18, lineHeight: 1 }}>{step.icon}</span>;
+  }
+
+  const key = `${step.name} ${step.agentRole ?? ""}`.toLowerCase();
+  const sz  = 20;
+  const props = { size: sz, color, strokeWidth: 1.8 };
+
+  if (/search|find|discover|lookup|look.?up|query/.test(key))         return <Search {...props} />;
+  if (/web|scrape|crawl|browse|fetch.*url|browser/.test(key))         return <Globe {...props} />;
+  if (/analys|evaluate|assess|measure|metric|insight/.test(key))      return <BarChart2 {...props} />;
+  if (/report|generat|produc|output|render|markdown/.test(key))       return <FileText {...props} />;
+  if (/extract|parse|retriev|download|collect|gather/.test(key))      return <Download {...props} />;
+  if (/review|check|valida|verify|audit|quality/.test(key))           return <CheckCircle2 {...props} />;
+  if (/identif|detect|classif|categoris|categoriz|recogni/.test(key)) return <ScanSearch {...props} />;
+  if (/rank|score|rate|compar|benchmark|prioriti/.test(key))          return <Star {...props} />;
+  if (/write|draft|compose|creat|author/.test(key))                   return <PenLine {...props} />;
+  if (/send|notif|deliver|email|message|alert/.test(key))             return <Send {...props} />;
+  if (/run|execut|trigger|launch|start/.test(key))                    return <Play {...props} />;
+  if (/transform|convert|process|compute/.test(key))                  return <Cpu {...props} />;
+  if (/layer|organis|organiz|sort|group|cluster/.test(key))           return <Layers {...props} />;
+  if (/summar|condense|distil|abstract/.test(key))                    return <AlignLeft {...props} />;
+  if (/plan|schedul|coordinat|allocat/.test(key))                     return <Calendar {...props} />;
+  if (/skill|zap|action/.test(key))                                   return <Zap {...props} />;
+  if (/tool|wrench|api|integrat/.test(key))                           return <Wrench {...props} />;
+  if (/data|database|storage|store/.test(key))                        return <Database {...props} />;
+  if (/filter|refin|narrow|select/.test(key))                         return <Filter {...props} />;
+
+  return <Workflow {...props} />;
 }
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
@@ -205,9 +244,6 @@ function StepNode({ data }: { data: StepNodeData }) {
   const pulse  = data.status === "running";
   const skills = data.step.skills ?? [];
   const tools  = data.step.tools  ?? [];
-  const inits  = (data.step.agentRole ?? data.step.name)
-    .trim().split(/\s+/).slice(0, 2)
-    .map((w) => w[0]).join("").toUpperCase().slice(0, 2);
   const role   = data.step.agentRole?.toUpperCase() ?? null;
 
   return (
@@ -258,9 +294,7 @@ function StepNode({ data }: { data: StepNodeData }) {
               animation: "flowPulse 1.4s ease-in-out infinite", pointerEvents: "none",
             }} />
           )}
-          <span style={{ fontSize: 17, fontWeight: 800, color, lineHeight: 1, opacity: 0.9 }}>
-            {inits}
-          </span>
+          <StepIcon step={data.step} color={color} />
         </div>
       </div>
 

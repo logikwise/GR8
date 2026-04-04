@@ -892,7 +892,7 @@ function CenterCanvas({
     mode === "blueprint" && blueprint
       ? (blueprint.steps as BlueprintStep[]).map((s) => ({
           id: s.id, name: s.name, description: s.description,
-          agentRole: s.agentRole, skills: s.skills, tools: s.tools,
+          agentRole: s.agentRole, icon: s.icon, skills: s.skills, tools: s.tools,
         }))
       : mode === "instance" && instance
       ? (() => {
@@ -902,6 +902,7 @@ function CenterCanvas({
             const bpStep = srcBp?.steps.find((bs) => bs.id === s.id || bs.name === s.name);
             return {
               id: s.id, name: s.name, description: s.description, agentRole: s.agentRole,
+              icon:   s.icon   ?? bpStep?.icon,
               skills: s.skills ?? bpStep?.skills,
               tools:  s.tools  ?? bpStep?.tools,
             };
