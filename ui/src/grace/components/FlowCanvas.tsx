@@ -1,31 +1,31 @@
 /**
- * FlowCanvas — Phase 9+
+ * FlowCanvas — Phase 9+ (circle node redesign)
+ *
+ * All node types are circles:
+ *   ┌──────────────────┐
+ *   │  TYPE  or  Step N │  ← small label ABOVE circle
+ *   │  ┌────────────┐   │
+ *   │  │ icon/init  │   │  ← circle with icon or initials
+ *   │  └────────────┘   │
+ *   │    node name       │  ← name BELOW circle
+ *   └──────────────────┘
+ *
+ * Node types:
+ *   stepNode   — violet/status color  — "Step N" above, agentRole as sub-label
+ *   agentNode  — blue                 — "AGENT" above
+ *   skillNode  — violet               — "SKILL" above
+ *   toolNode   — amber                — "TOOL" above
+ *
+ * Step status → circle color:
+ *   idle:      #475569  ready: #0ea5e9  running: #22c55e (pulse)
+ *   waiting:   #f59e0b  completed: #3b82f6  failed: #ef4444
  *
  * Features:
- *   - Pan + drag canvas natively
- *   - Mouse wheel / trackpad zoom
+ *   - Pan / drag / zoom (ReactFlow)
  *   - fitView on load
  *   - MiniMap, Controls, Background (dots)
- *   - Custom node types: StepNode, AgentNode (circle), SkillNode, ToolNode
- *   - Agent nodes are circles (avatar-ready)
- *   - Step status → node color + pulse animation
- *   - Click step node → onStepInspect()
- *   - "Reset to row" toolbar button — snaps all nodes back to an even
- *     horizontal row and fits the view; does not prevent free dragging.
- *
- * Color system:
- *   agent:    #3b82f6 (blue)
- *   step:     #8b5cf6 (violet, default) / status overrides
- *   skill:    #8b5cf6 (violet)
- *   tool:     #f59e0b (amber)
- *
- * Step status → node color:
- *   idle:      #475569 (slate)
- *   ready:     #0ea5e9 (sky)
- *   running:   #22c55e (emerald) + pulse ring
- *   waiting:   #f59e0b (amber)
- *   completed: #3b82f6 (blue)
- *   failed:    #ef4444 (red)
+ *   - "Reset to row" button (top-right)
+ *   - Status pulse ring on running steps
  */
 
 import { useCallback, useMemo, useEffect } from "react";
@@ -67,6 +67,7 @@ interface FlowCanvasProps {
 interface StepNodeData {
   step: FlowStep;
   status: StepStatus;
+  index: number;
   onInspect: (step: FlowStep) => void;
 }
 
@@ -98,228 +99,287 @@ const STEP_STATUS_COLOR: Record<StepStatus, string> = {
   failed:       "#ef4444",
 };
 
-const STEP_STATUS_BG: Record<StepStatus, string> = {
-  idle:         "rgba(71,85,105,0.08)",
-  ready:        "rgba(14,165,233,0.08)",
-  running:      "rgba(34,197,94,0.12)",
-  waiting:      "rgba(245,158,11,0.08)",
-  human_review: "rgba(168,85,247,0.08)",
-  completed:    "rgba(59,130,246,0.10)",
-  failed:       "rgba(239,68,68,0.10)",
-};
+// ─── Shared helpers ───────────────────────────────────────────────────────────
+
+/** Up to 2-letter initials from a name string */
+function initials(name: string): string {
+  const words = name.trim().split(/\s+/);
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+
+/** Truncate a string to max chars with ellipsis */
+function trunc(s: string, max = 14): string {
+  return s.length > max ? s.slice(0, max - 1) + "…" : s;
+}
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 
-const STEP_W          = 220;
-const STEP_H          = 90;   // approximate, used for agent offset
-const STEP_GAP        = 60;
-const AGENT_SIZE      = 64;   // diameter of the circle node
-const AGENT_GAP       = 24;
-const AGENT_OFFSET_X  = 0;
-const AGENT_OFFSET_Y  = -(AGENT_SIZE + 60); // above the step row
+const STEP_SIZE        = 68;   // step circle diameter
+const STEP_SPACING     = 140;  // horizontal distance between step node origins
+const AGENT_SIZE       = 60;   // agent circle diameter
+const AGENT_GAP        = 20;
+const AGENT_OFFSET_X   = 0;
+const AGENT_OFFSET_Y   = -(AGENT_SIZE + 80); // well above step row
+const SKILL_SIZE       = 44;
+const SKILL_OFFSET_Y   = 140;  // below step row
+const SKILL_SPACING    = 60;
 
-// ─── Custom Nodes ─────────────────────────────────────────────────────────────
-
-function StepNode({ data }: { data: StepNodeData }) {
-  const color = STEP_STATUS_COLOR[data.status] ?? STEP_STATUS_COLOR.idle;
-  const bg    = STEP_STATUS_BG[data.status]    ?? STEP_STATUS_BG.idle;
-  const pulse = data.status === "running";
-  const skills = data.step.skills?.slice(0, 3) ?? [];
-  const tools  = data.step.tools?.slice(0, 3)  ?? [];
-
-  return (
-    <div
-      onClick={() => data.onInspect(data.step)}
-      style={{
-        border: `1.5px solid ${color}`,
-        background: bg,
-        borderRadius: 10,
-        padding: "10px 14px",
-        minWidth: 160,
-        maxWidth: 220,
-        cursor: "pointer",
-        position: "relative",
-        backdropFilter: "blur(4px)",
-        boxShadow: pulse
-          ? `0 0 0 3px ${color}33, 0 2px 12px ${color}22`
-          : `0 1px 6px rgba(0,0,0,0.2)`,
-        transition: "box-shadow 0.2s",
-      }}
-    >
-      {pulse && (
-        <span
-          style={{
-            position: "absolute",
-            inset: -4,
-            borderRadius: 13,
-            border: `2px solid ${color}`,
-            opacity: 0.5,
-            animation: "flowPulse 1.4s ease-in-out infinite",
-            pointerEvents: "none",
-          }}
-        />
-      )}
-      <Handle type="target" position={Position.Left}  style={{ background: color, width: 8, height: 8, border: "none" }} />
-      <Handle type="source" position={Position.Right} style={{ background: color, width: 8, height: 8, border: "none" }} />
-
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-        <span style={{
-          width: 7, height: 7, borderRadius: "50%", background: color,
-          flexShrink: 0, boxShadow: pulse ? `0 0 6px ${color}` : "none",
-        }} />
-        <span style={{
-          fontSize: 11, fontWeight: 600, color: "var(--foreground)",
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1,
-        }}>
-          {data.step.name}
-        </span>
-      </div>
-
-      {data.step.agentRole && (
-        <div style={{ fontSize: 9, color, opacity: 0.8, marginBottom: 3, marginLeft: 13 }}>
-          {data.step.agentRole}
-        </div>
-      )}
-
-      {(skills.length > 0 || tools.length > 0) && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginLeft: 13 }}>
-          {skills.map((s) => (
-            <span key={s.id} style={{
-              fontSize: 8, padding: "1px 5px", borderRadius: 4,
-              background: "rgba(139,92,246,0.12)", color: "#8b5cf6",
-              border: "1px solid rgba(139,92,246,0.2)",
-            }}>{s.name ?? s.id}</span>
-          ))}
-          {tools.map((t) => (
-            <span key={t.id} style={{
-              fontSize: 8, padding: "1px 5px", borderRadius: 4,
-              background: "rgba(245,158,11,0.10)", color: "#f59e0b",
-              border: "1px solid rgba(245,158,11,0.2)",
-            }}>{t.name ?? t.id}</span>
-          ))}
-        </div>
-      )}
-
-      <div style={{
-        marginTop: 5, marginLeft: 13, fontSize: 9,
-        color, opacity: 0.7, textTransform: "uppercase", letterSpacing: "0.05em",
-      }}>
-        {data.status}
-      </div>
-    </div>
-  );
-}
+// ─── Shared circle wrapper ────────────────────────────────────────────────────
 
 /**
- * AgentNode — circle shape, ready for avatar image in future.
- * Currently shows the first letter of the agent name as a monogram.
- * The agent name label floats below the circle.
+ * A column-flex wrapper: [label above] [circle] [name below]
+ * Children go inside the circle div.
  */
-function AgentNode({ data }: { data: AgentNodeData }) {
-  const color = data.linked ? "#3b82f6" : "#64748b";
-  const SIZE  = AGENT_SIZE;
-
+function CircleNode({
+  size,
+  color,
+  borderStyle = "solid",
+  bgAlpha = 0.12,
+  pulse = false,
+  aboveLines,
+  name,
+  children,
+  onClick,
+}: {
+  size: number;
+  color: string;
+  borderStyle?: "solid" | "dashed";
+  bgAlpha?: number;
+  pulse?: boolean;
+  aboveLines: React.ReactNode;
+  name: string;
+  children: React.ReactNode;
+  onClick?: () => void;
+}) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-      {/* Circle */}
-      <div style={{
-        width:  SIZE,
-        height: SIZE,
-        borderRadius: "50%",
-        border: `2px solid ${color}`,
-        borderStyle: data.linked ? "solid" : "dashed",
-        background: `rgba(${data.linked ? "59,130,246" : "100,116,139"},0.12)`,
-        boxShadow: data.linked
-          ? `0 0 0 4px ${color}18, 0 2px 12px ${color}30`
-          : "0 1px 6px rgba(0,0,0,0.18)",
+    <div
+      onClick={onClick}
+      style={{
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        justifyContent: "center",
-        position: "relative",
-        cursor: "default",
-        flexShrink: 0,
-        transition: "box-shadow 0.2s",
+        cursor: onClick ? "pointer" : "default",
+        userSelect: "none",
+      }}
+    >
+      {/* Label(s) above */}
+      <div style={{
+        marginBottom: 5,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 1,
+        minHeight: 22,
       }}>
-        {/* Source handle on the right edge of the circle */}
-        <Handle
-          type="source"
-          position={Position.Bottom}
-          style={{ background: color, width: 8, height: 8, border: "none" }}
-        />
-
-        {/* Monogram — will be replaced by avatar img in the future */}
-        <span style={{
-          fontSize: 20,
-          fontWeight: 700,
-          color,
-          lineHeight: 1,
-          userSelect: "none",
-        }}>
-          {data.label.charAt(0).toUpperCase()}
-        </span>
-
-        {/* Role tag inside circle */}
-        <span style={{
-          fontSize: 7,
-          color,
-          opacity: 0.75,
-          textTransform: "uppercase",
-          letterSpacing: "0.06em",
-          marginTop: 3,
-          textAlign: "center",
-          maxWidth: SIZE - 12,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}>
-          {data.role}
-        </span>
+        {aboveLines}
       </div>
 
-      {/* Agent name label below the circle */}
+      {/* Circle */}
+      <div style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        border: `2px solid ${color}`,
+        borderStyle,
+        background: `rgba(${hexToRgb(color)},${bgAlpha})`,
+        boxShadow: pulse
+          ? `0 0 0 4px ${color}30, 0 0 16px ${color}30`
+          : `0 0 0 3px ${color}14, 0 2px 8px rgba(0,0,0,0.22)`,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        position: "relative",
+        flexShrink: 0,
+        transition: "box-shadow 0.2s, border-color 0.2s",
+      }}>
+        {pulse && (
+          <span style={{
+            position: "absolute",
+            inset: -5,
+            borderRadius: "50%",
+            border: `2px solid ${color}`,
+            opacity: 0.45,
+            animation: "flowPulse 1.4s ease-in-out infinite",
+            pointerEvents: "none",
+          }} />
+        )}
+        {children}
+      </div>
+
+      {/* Name below */}
       <div style={{
         marginTop: 6,
         fontSize: 9,
         fontWeight: 600,
         color: "var(--foreground)",
         opacity: 0.75,
-        whiteSpace: "nowrap",
         textAlign: "center",
-        maxWidth: SIZE + 24,
+        maxWidth: size + 28,
         overflow: "hidden",
         textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        lineHeight: 1.3,
       }}>
-        {data.label}
+        {trunc(name, 16)}
       </div>
     </div>
   );
 }
 
-function SkillNode({ data }: { data: SkillNodeData }) {
+/** Convert 6-char hex (#rrggbb) to "r,g,b" for rgba() */
+function hexToRgb(hex: string): string {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  if (isNaN(r)) return "100,116,139"; // fallback slate
+  return `${r},${g},${b}`;
+}
+
+// ─── Tiny label helpers ───────────────────────────────────────────────────────
+
+function TypeLabel({ text, color }: { text: string; color: string }) {
   return (
-    <div style={{
-      border: "1px solid rgba(139,92,246,0.3)",
-      background: "rgba(139,92,246,0.06)",
-      borderRadius: 6, padding: "4px 10px", fontSize: 9,
-      color: "#8b5cf6", fontWeight: 500,
+    <span style={{
+      fontSize: 8,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: "0.12em",
+      color,
+      opacity: 0.8,
+      whiteSpace: "nowrap",
     }}>
-      <Handle type="target" position={Position.Top} style={{ background: "#8b5cf6", width: 6, height: 6, border: "none" }} />
-      {data.label}
+      {text}
+    </span>
+  );
+}
+
+function StepNumLabel({ n }: { n: number }) {
+  return (
+    <span style={{
+      fontSize: 8,
+      fontWeight: 600,
+      color: "var(--foreground)",
+      opacity: 0.35,
+      letterSpacing: "0.06em",
+      whiteSpace: "nowrap",
+    }}>
+      Step {n}
+    </span>
+  );
+}
+
+// ─── Custom Nodes ─────────────────────────────────────────────────────────────
+
+function StepNode({ data }: { data: StepNodeData }) {
+  const color = STEP_STATUS_COLOR[data.status] ?? STEP_STATUS_COLOR.idle;
+  const pulse = data.status === "running";
+  const init  = initials(data.step.name);
+  // agentRole displayed as the type label (e.g. "PRIMARY", "SCHEDULE", "REPORT")
+  const roleLabel = data.step.agentRole
+    ? data.step.agentRole.toUpperCase()
+    : null;
+
+  return (
+    <div style={{ position: "relative" }}>
+      <Handle type="target" position={Position.Left}
+        style={{ background: color, width: 7, height: 7, border: "none", left: -3 }} />
+      <Handle type="source" position={Position.Right}
+        style={{ background: color, width: 7, height: 7, border: "none", right: -3 }} />
+
+      <CircleNode
+        size={STEP_SIZE}
+        color={color}
+        pulse={pulse}
+        onClick={() => data.onInspect(data.step)}
+        name={data.step.name}
+        aboveLines={
+          <>
+            <StepNumLabel n={data.index + 1} />
+            {roleLabel && <TypeLabel text={roleLabel} color={color} />}
+          </>
+        }
+      >
+        <span style={{
+          fontSize: roleLabel ? 18 : 22,
+          fontWeight: 800,
+          color,
+          lineHeight: 1,
+          opacity: 0.9,
+        }}>
+          {init}
+        </span>
+      </CircleNode>
+    </div>
+  );
+}
+
+function AgentNode({ data }: { data: AgentNodeData }) {
+  const color = data.linked ? "#3b82f6" : "#64748b";
+
+  return (
+    <div style={{ position: "relative" }}>
+      <Handle type="source" position={Position.Bottom}
+        style={{ background: color, width: 7, height: 7, border: "none", bottom: -3 }} />
+
+      <CircleNode
+        size={AGENT_SIZE}
+        color={color}
+        borderStyle={data.linked ? "solid" : "dashed"}
+        name={data.label}
+        aboveLines={
+          <TypeLabel text="AGENT" color={color} />
+        }
+      >
+        <span style={{
+          fontSize: 22,
+          fontWeight: 800,
+          color,
+          lineHeight: 1,
+          opacity: 0.9,
+        }}>
+          {data.label.charAt(0).toUpperCase()}
+        </span>
+      </CircleNode>
+    </div>
+  );
+}
+
+function SkillNode({ data }: { data: SkillNodeData }) {
+  const color = "#8b5cf6";
+  return (
+    <div style={{ position: "relative" }}>
+      <Handle type="target" position={Position.Top}
+        style={{ background: color, width: 6, height: 6, border: "none", top: -3 }} />
+
+      <CircleNode
+        size={SKILL_SIZE}
+        color={color}
+        name={data.label}
+        aboveLines={<TypeLabel text="SKILL" color={color} />}
+      >
+        <span style={{ fontSize: 16, lineHeight: 1, opacity: 0.85 }}>⚡</span>
+      </CircleNode>
     </div>
   );
 }
 
 function ToolNode({ data }: { data: ToolNodeData }) {
+  const color = "#f59e0b";
   return (
-    <div style={{
-      border: "1px solid rgba(245,158,11,0.3)",
-      background: "rgba(245,158,11,0.06)",
-      borderRadius: 6, padding: "4px 10px", fontSize: 9,
-      color: "#f59e0b", fontWeight: 500,
-    }}>
-      <Handle type="target" position={Position.Top} style={{ background: "#f59e0b", width: 6, height: 6, border: "none" }} />
-      {data.label}
+    <div style={{ position: "relative" }}>
+      <Handle type="target" position={Position.Top}
+        style={{ background: color, width: 6, height: 6, border: "none", top: -3 }} />
+
+      <CircleNode
+        size={SKILL_SIZE}
+        color={color}
+        name={data.label}
+        aboveLines={<TypeLabel text="TOOL" color={color} />}
+      >
+        <span style={{ fontSize: 15, lineHeight: 1, opacity: 0.85 }}>⚙</span>
+      </CircleNode>
     </div>
   );
 }
@@ -342,48 +402,84 @@ function buildNodesEdges(
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
-  // ── Step nodes — left to right, centered row ──────────────────────────────
+  // ── Step nodes ─────────────────────────────────────────────────────────────
   steps.forEach((step, i) => {
-    const x = i * (STEP_W + STEP_GAP);
-    const y = 0;
+    const x      = i * STEP_SPACING;
+    const y      = 0;
     const status: StepStatus = (statuses[step.id] as StepStatus) ?? "idle";
 
     nodes.push({
       id: step.id,
       type: "stepNode",
       position: { x, y },
-      data: { step, status, onInspect: onStepInspect } satisfies StepNodeData,
-      style: { width: STEP_W },
+      data: { step, status, index: i, onInspect: onStepInspect } satisfies StepNodeData,
     });
 
     if (i > 0) {
+      const prevColor = STEP_STATUS_COLOR[(statuses[steps[i - 1].id] as StepStatus) ?? "idle"];
       edges.push({
         id: `step-edge-${i}`,
         source: steps[i - 1].id,
         target: step.id,
-        style: { stroke: "#475569", strokeWidth: 1.5 },
+        style: { stroke: "#334155", strokeWidth: 1.5 },
         animated: status === "running",
       });
     }
+
+    // ── Skill sub-nodes (satellite below this step) ────────────────────────
+    const skills = step.skills ?? [];
+    skills.forEach((skill, si) => {
+      const skillId = `skill-${skill.id}-${step.id}`;
+      const totalW  = skills.length * SKILL_SIZE + (skills.length - 1) * 12;
+      const startX  = x + STEP_SIZE / 2 - totalW / 2 + si * (SKILL_SIZE + 12);
+      nodes.push({
+        id: skillId,
+        type: "skillNode",
+        position: { x: startX, y: SKILL_OFFSET_Y },
+        data: { label: skill.name, parentStepId: step.id } satisfies SkillNodeData,
+      });
+      edges.push({
+        id: `skill-edge-${skillId}`,
+        source: step.id,
+        target: skillId,
+        style: { stroke: "rgba(139,92,246,0.3)", strokeWidth: 1, strokeDasharray: "3 3" },
+      });
+    });
+
+    // ── Tool sub-nodes (satellite below skills) ────────────────────────────
+    const tools = step.tools ?? [];
+    tools.forEach((tool, ti) => {
+      const toolId  = `tool-${tool.id}-${step.id}`;
+      const totalW  = tools.length * SKILL_SIZE + (tools.length - 1) * 12;
+      const skillsH = (step.skills?.length ?? 0) > 0 ? SKILL_SIZE + 60 : 0;
+      const startX  = x + STEP_SIZE / 2 - totalW / 2 + ti * (SKILL_SIZE + 12);
+      nodes.push({
+        id: toolId,
+        type: "toolNode",
+        position: { x: startX, y: SKILL_OFFSET_Y + skillsH },
+        data: { label: tool.name, parentStepId: step.id } satisfies ToolNodeData,
+      });
+      edges.push({
+        id: `tool-edge-${toolId}`,
+        source: step.id,
+        target: toolId,
+        style: { stroke: "rgba(245,158,11,0.3)", strokeWidth: 1, strokeDasharray: "3 3" },
+      });
+    });
   });
 
-  // ── Agent nodes — circular, stacked above the step row ───────────────────
+  // ── Agent nodes ────────────────────────────────────────────────────────────
   const firstStepId = steps[0]?.id;
-  const totalAgentW = agents.length * AGENT_SIZE + (agents.length - 1) * AGENT_GAP;
-  // Center agents above the first ~third of the step row
-  const agentRowStart = AGENT_OFFSET_X;
-
   agents.forEach((agent, i) => {
     const agentId = `agent-${agent.id}`;
-    const x = agentRowStart + i * (AGENT_SIZE + AGENT_GAP);
-    const y = AGENT_OFFSET_Y;
+    const x       = AGENT_OFFSET_X + i * (AGENT_SIZE + AGENT_GAP);
+    const y       = AGENT_OFFSET_Y;
 
     nodes.push({
       id: agentId,
       type: "agentNode",
       position: { x, y },
       data: { label: agent.label, role: agent.role, linked: agent.linked } satisfies AgentNodeData,
-      // No fixed width — circle is self-sizing
     });
 
     if (firstStepId) {
@@ -391,7 +487,6 @@ function buildNodesEdges(
         id: `agent-edge-${agentId}`,
         source: agentId,
         target: firstStepId,
-        sourceHandle: null,
         style: {
           stroke: agent.linked ? "#3b82f6" : "#475569",
           strokeWidth: 1,
@@ -406,18 +501,16 @@ function buildNodesEdges(
 
 // ─── Reset layout helper ──────────────────────────────────────────────────────
 
-/**
- * Returns updated positions for a "reset to horizontal row" layout.
- * Step nodes get evenly spaced in a row; agent nodes go back above them.
- */
 function computeResetPositions(nodes: Node[]): Node[] {
   const stepNodes  = nodes.filter((n) => n.type === "stepNode");
   const agentNodes = nodes.filter((n) => n.type === "agentNode");
-  const otherNodes = nodes.filter((n) => n.type !== "stepNode" && n.type !== "agentNode");
+  const skillNodes = nodes.filter((n) => n.type === "skillNode");
+  const toolNodes  = nodes.filter((n) => n.type === "toolNode");
 
+  // Re-derive step index from current ordering
   const updatedSteps = stepNodes.map((n, i) => ({
     ...n,
-    position: { x: i * (STEP_W + STEP_GAP), y: 0 },
+    position: { x: i * STEP_SPACING, y: 0 },
   }));
 
   const updatedAgents = agentNodes.map((n, i) => ({
@@ -425,7 +518,24 @@ function computeResetPositions(nodes: Node[]): Node[] {
     position: { x: AGENT_OFFSET_X + i * (AGENT_SIZE + AGENT_GAP), y: AGENT_OFFSET_Y },
   }));
 
-  return [...updatedSteps, ...updatedAgents, ...otherNodes];
+  // Keep skill/tool positions relative to their parent steps
+  // (approximate — group by parentStepId order)
+  const parentOrder: Record<string, number> = {};
+  updatedSteps.forEach((n, i) => { parentOrder[n.id] = i; });
+
+  const updatedSkills = skillNodes.map((n) => {
+    const data = n.data as SkillNodeData;
+    const si   = parentOrder[data.parentStepId] ?? 0;
+    return { ...n, position: { x: si * STEP_SPACING, y: SKILL_OFFSET_Y } };
+  });
+
+  const updatedTools = toolNodes.map((n) => {
+    const data = n.data as ToolNodeData;
+    const si   = parentOrder[data.parentStepId] ?? 0;
+    return { ...n, position: { x: si * STEP_SPACING, y: SKILL_OFFSET_Y + SKILL_SIZE + 60 } };
+  });
+
+  return [...updatedSteps, ...updatedAgents, ...updatedSkills, ...updatedTools];
 }
 
 // ─── Inner canvas ─────────────────────────────────────────────────────────────
@@ -454,7 +564,7 @@ function FlowCanvasInner({ steps, agents, stepStatuses = {}, onStepInspect }: Fl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [steps.map((s) => s.id).join(","), agents.map((a) => a.id).join(",")]);
 
-  // Update step status colors without resetting positions
+  // Update step status without resetting positions
   useEffect(() => {
     setNodes((prev) =>
       prev.map((node) => {
@@ -474,7 +584,6 @@ function FlowCanvasInner({ steps, agents, stepStatuses = {}, onStepInspect }: Fl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(stepStatuses)]);
 
-  // ── Reset to row ───────────────────────────────────────────────────────────
   const handleResetLayout = useCallback(() => {
     setNodes((prev) => computeResetPositions(prev));
     setTimeout(() => fitView({ padding: 0.25, duration: 400 }), 50);
@@ -485,13 +594,13 @@ function FlowCanvasInner({ steps, agents, stepStatuses = {}, onStepInspect }: Fl
       <style>{`
         @keyframes flowPulse {
           0%, 100% { opacity: 0.3; transform: scale(1); }
-          50%       { opacity: 0.6; transform: scale(1.04); }
+          50%       { opacity: 0.65; transform: scale(1.06); }
         }
-        .react-flow__node          { cursor: default; }
-        .react-flow__node:hover    { z-index: 10; }
-        .react-flow__controls      { bottom: 16px; left: 16px; }
-        .react-flow__minimap       { bottom: 16px; right: 16px; border-radius: 8px; overflow: hidden; }
-        .react-flow__background    { opacity: 0.4; }
+        .react-flow__node         { cursor: default; }
+        .react-flow__node:hover   { z-index: 10; }
+        .react-flow__controls     { bottom: 16px; left: 16px; }
+        .react-flow__minimap      { bottom: 16px; right: 16px; border-radius: 8px; overflow: hidden; }
+        .react-flow__background   { opacity: 0.4; }
         .grace-reset-btn {
           display: flex; align-items: center; justify-content: center;
           width: 26px; height: 26px;
@@ -515,8 +624,8 @@ function FlowCanvasInner({ steps, agents, stepStatuses = {}, onStepInspect }: Fl
         onEdgesChange={onEdgesChange}
         nodeTypes={NODE_TYPES}
         fitView
-        fitViewOptions={{ padding: 0.25 }}
-        minZoom={0.2}
+        fitViewOptions={{ padding: 0.3 }}
+        minZoom={0.15}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
         style={{ background: "transparent" }}
@@ -545,13 +654,10 @@ function FlowCanvasInner({ steps, agents, stepStatuses = {}, onStepInspect }: Fl
             return STEP_STATUS_COLOR[d?.status ?? "idle"] ?? "#475569";
           }}
           maskColor="rgba(0,0,0,0.6)"
-          style={{
-            background: "var(--card)",
-            border: "1px solid var(--border)",
-          }}
+          style={{ background: "var(--card)", border: "1px solid var(--border)" }}
         />
 
-        {/* Reset-to-row button — top-right corner */}
+        {/* Reset-to-row button — top-right */}
         <Panel position="top-right" style={{ top: 8, right: 8, margin: 0 }}>
           <button
             type="button"
