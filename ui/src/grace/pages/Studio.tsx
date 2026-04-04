@@ -1334,10 +1334,10 @@ function BottomPanel({
             <div className="flex flex-wrap gap-2">
               {allTools.length === 0 && <p className="text-xs text-muted-foreground/40">No tools defined.</p>}
               {allTools.map((tool) => (
-                <div key={tool.id} className="flex items-center gap-1.5 rounded border border-border/60 bg-muted/30 px-2.5 py-1 text-xs">
-                  <Wrench size={10} className="text-muted-foreground/60" />
+                <div key={tool.id} className="flex items-center gap-1.5 rounded border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-400">
+                  <Wrench size={10} className="text-amber-500/60" />
                   {tool.name}
-                  <span className="text-[9px] text-muted-foreground/40">· tool</span>
+                  <span className="text-[9px] text-amber-400/40">· tool</span>
                 </div>
               ))}
             </div>

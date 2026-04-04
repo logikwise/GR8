@@ -37,11 +37,12 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 function Chip({
-  icon, label, accent, active, onClick,
+  icon, label, accent, amber, active, onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   accent?: boolean;
+  amber?: boolean;
   active?: boolean;
   onClick?: () => void;
 }) {
@@ -52,7 +53,11 @@ function Chip({
       className={cn(
         "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] border transition-colors",
         onClick ? "cursor-pointer" : "cursor-default",
-        active
+        amber
+          ? active
+            ? "border-amber-500/60 bg-amber-500/20 text-amber-400 shadow-sm"
+            : "border-amber-500/25 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+          : active
           ? "border-[var(--grace-accent)]/60 bg-[var(--grace-accent)]/20 text-[var(--grace-accent)] shadow-sm"
           : accent
           ? "border-[var(--grace-accent)]/25 bg-[var(--grace-accent-muted)] text-[var(--grace-accent)] hover:bg-[var(--grace-accent)]/20"
@@ -173,7 +178,7 @@ export function StepInspector({
                   key={t.id}
                   icon={<Wrench size={8} />}
                   label={t.name}
-                  accent
+                  amber
                   active={activeToolId === t.id}
                   onClick={onToolClick ? () => onToolClick(t.id) : undefined}
                 />
