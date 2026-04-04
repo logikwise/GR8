@@ -895,9 +895,18 @@ function CenterCanvas({
           agentRole: s.agentRole, skills: s.skills, tools: s.tools,
         }))
       : mode === "instance" && instance
-      ? (instance.graphSnapshot as InstanceStepSnapshot[]).map((s) => ({
-          id: s.id, name: s.name, description: s.description, agentRole: s.agentRole,
-        }))
+      ? (() => {
+          // Fallback: load source blueprint to fill skills/tools if snapshot predates that field
+          const srcBp = blueprintService.getById(instance.blueprintId);
+          return (instance.graphSnapshot as InstanceStepSnapshot[]).map((s) => {
+            const bpStep = srcBp?.steps.find((bs) => bs.id === s.id || bs.name === s.name);
+            return {
+              id: s.id, name: s.name, description: s.description, agentRole: s.agentRole,
+              skills: s.skills ?? bpStep?.skills,
+              tools:  s.tools  ?? bpStep?.tools,
+            };
+          });
+        })()
       : [];
 
   // Step status map for live node coloring in FlowCanvas

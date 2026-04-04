@@ -163,6 +163,8 @@ export function CreateInstanceModal({ blueprint, open, onClose, onCreated }: Cre
         icon: s.icon,
         prompt: s.prompt,
         agentRole: s.agentRole,
+        skills: s.skills,
+        tools: s.tools,
       })),
       configSnapshot,
       agentAssignments: assignments,

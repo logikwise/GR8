@@ -27,6 +27,8 @@ export interface InstanceStepSnapshot {
   icon?: string;
   prompt?: string;
   agentRole?: string;
+  skills?: Array<{ id: string; name: string }>;
+  tools?: Array<{ id: string; name: string }>;
 }
 
 export interface Instance {
