@@ -88,6 +88,52 @@ export interface ProviderSendResult {
   message?: string;
 }
 
+// ─── Provider readiness model ─────────────────────────────────────────────────
+
+/**
+ * ProviderReadiness — richer than a simple health check.
+ * Derived from probe check codes so we distinguish:
+ *   reachable   = network round-trip succeeded
+ *   paired      = connect handshake approved (not just challenge received)
+ *   agentsAvailable = at least one agent discovered
+ *   executionReady  = reachable + paired (minimum viable run condition)
+ */
+export interface ProviderReadiness {
+  reachable: boolean;
+  paired: boolean;
+  agentsAvailable: boolean;
+  executionReady: boolean;
+  /** ISO timestamp of last evaluation */
+  lastCheckedAt: string | null;
+  /** Human-readable one-liner */
+  details: string;
+  /** Raw health result that produced this record (optional – may be absent if loaded from cache) */
+  checkResult?: ProviderHealthResult;
+}
+
+// ─── Discovered agents ────────────────────────────────────────────────────────
+
+export interface DiscoveredAgent {
+  id: string;
+  /** Provider-native agent ID (device ID, worker ID, etc.) */
+  providerAgentId: string;
+  provider: ProviderType;
+  name: string;
+  /** Provider-reported type string (e.g. "worker", "device", "cli") */
+  type: string;
+  status?: "available" | "busy" | "offline" | "unknown";
+  metadata?: Record<string, string>;
+}
+
+export interface AgentDiscoveryResult {
+  /** True iff the provider/gateway supports agent enumeration */
+  discoverable: boolean;
+  agents: DiscoveredAgent[];
+  /** Reason string when discoverable === false */
+  reason?: string;
+  discoveredAt: string;
+}
+
 // ─── Provider capability model ────────────────────────────────────────────────
 
 /**

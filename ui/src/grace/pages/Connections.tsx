@@ -15,12 +15,17 @@ import { useState, useEffect } from "react";
 import {
   Plug, Wifi, WifiOff, CheckCircle, AlertTriangle,
   ChevronDown, ChevronUp, Loader, X, Save, RefreshCw,
-  Zap,
+  Zap, CheckCircle2, XCircle, Search, Bot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { providerService } from "../providers/providerService";
 import { PROVIDER_LABELS } from "../providers/providerTypes";
-import type { ProviderConfig, ProviderType, ProviderHealthResult, ProviderCapabilities } from "../providers/providerTypes";
+import type {
+  ProviderConfig, ProviderType, ProviderHealthResult, ProviderCapabilities,
+  ProviderReadiness, AgentDiscoveryResult,
+} from "../providers/providerTypes";
+import { readinessService } from "../providers/readinessService";
+import { agentDiscoveryService } from "../providers/agentDiscoveryService";
 
 const PROVIDER_DESCRIPTIONS: Record<ProviderType, string> = {
   openclaw: "WebSocket gateway adapter. Connects GRACE to an OpenClaw agent backend via device-auth. See packages/adapters/openclaw-gateway.",
@@ -51,13 +56,13 @@ const CAPABILITY_ENTRIES: CapabilityEntry[] = [
 
 const PROVIDER_CAPABILITIES: Record<ProviderType, Record<keyof ProviderCapabilities, CapabilityStatus>> = {
   openclaw: {
-    healthCheck:     "live",     // POST /api/grace/provider/openclaw/probe — wired Phase 7
-    runDispatch:     "planned",  // Local run record created; gateway execution = Phase 6
-    eventStream:     "planned",  // WebSocket event stream via gateway — Phase 6
-    eventPoll:       "none",     // Not planned
-    chatInteraction: "planned",  // Requires Phase 6 gateway run session
-    agentDiscovery:  "planned",  // Via gateway protocol — Phase 6+
-    outputListing:   "planned",  // Via gateway protocol — Phase 6+
+    healthCheck:     "live",     // POST /api/grace/provider/openclaw/probe
+    runDispatch:     "live",     // POST /api/grace/run/dispatch — real OpenClaw execute()
+    eventStream:     "planned",  // WebSocket event stream via gateway — future phase
+    eventPoll:       "live",     // GET /api/grace/run/:id/poll — wired Phase 8
+    chatInteraction: "planned",  // Requires bidirectional gateway session — future
+    agentDiscovery:  "planned",  // Gateway v3 has no list endpoint yet — infrastructure ready
+    outputListing:   "planned",  // Via gateway protocol — future phase
   },
   hermes: {
     healthCheck:     "none",
@@ -151,6 +156,184 @@ const LEVEL_ICON: Record<CheckLevel, React.ReactNode> = {
   warn:  <AlertTriangle size={12} className="text-amber-500  shrink-0" />,
   error: <AlertTriangle size={12} className="text-destructive shrink-0" />,
 };
+
+// ─── Readiness summary card ───────────────────────────────────────────────────
+
+function ReadinessBadge({ ok, label }: { ok: boolean | null; label: string }) {
+  if (ok === null) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className="w-2 h-2 rounded-full bg-muted-foreground/20 inline-block shrink-0" />
+        <span className="text-[11px] text-muted-foreground/50">{label}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1.5">
+      {ok
+        ? <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />
+        : <XCircle      size={12} className="text-destructive/80 shrink-0" />}
+      <span className={cn("text-[11px] font-medium", ok ? "text-emerald-600" : "text-destructive/80")}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function ReadinessCard({ readiness }: { readiness: ProviderReadiness }) {
+  const [expanded, setExpanded] = useState(false);
+  const showPairingHint = readiness.reachable && !readiness.paired;
+
+  return (
+    <div className={cn(
+      "rounded-lg border p-3 mt-2 text-xs",
+      readiness.executionReady
+        ? "border-emerald-500/30 bg-emerald-500/5"
+        : readiness.reachable
+        ? "border-amber-500/30 bg-amber-500/5"
+        : "border-destructive/30 bg-destructive/5",
+    )}>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <p className={cn(
+          "font-semibold",
+          readiness.executionReady ? "text-emerald-600" :
+          readiness.reachable ? "text-amber-600" : "text-destructive",
+        )}>
+          {readiness.executionReady
+            ? "Execution ready"
+            : readiness.reachable
+            ? "Reachable — needs pairing"
+            : "Not reachable"}
+        </p>
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className="text-muted-foreground/60 hover:text-foreground"
+        >
+          {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+        <ReadinessBadge ok={readiness.reachable} label="Reachable" />
+        <ReadinessBadge ok={readiness.paired}    label="Paired / approved" />
+        <ReadinessBadge ok={readiness.agentsAvailable ? true : null} label="Agents available" />
+        <ReadinessBadge ok={readiness.executionReady} label="Execution ready" />
+      </div>
+
+      {expanded && (
+        <p className="mt-2 text-muted-foreground/70 leading-snug">{readiness.details}</p>
+      )}
+
+      {showPairingHint && (
+        <div className="mt-3 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 space-y-1">
+          <p className="font-semibold">Pairing required</p>
+          <p>The gateway received the connect request but rejected it. To fix this:</p>
+          <ol className="list-decimal list-inside space-y-0.5 text-amber-700/80">
+            <li>Open your OpenClaw dashboard.</li>
+            <li>Find the pending device request for this connection.</li>
+            <li>Approve or allowlist the device.</li>
+            <li>Re-run Test Connection to confirm.</li>
+          </ol>
+        </div>
+      )}
+
+      {readiness.lastCheckedAt && (
+        <p className="mt-2 text-[10px] text-muted-foreground/40">
+          Checked {new Date(readiness.lastCheckedAt).toLocaleTimeString()}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Agent discovery section ──────────────────────────────────────────────────
+
+function AgentDiscoverySection({
+  config,
+  discovery,
+  onDiscover,
+  discovering,
+}: {
+  config: ProviderConfig;
+  discovery: AgentDiscoveryResult | null;
+  onDiscover: () => void;
+  discovering: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-border/50 bg-muted/10 p-3 mt-3">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-1.5">
+          <Bot size={11} className="text-muted-foreground/50" />
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">
+            Agent Discovery
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onDiscover}
+          disabled={discovering || !config.gatewayUrl?.trim()}
+          className="flex items-center gap-1 text-[10px] text-muted-foreground/60 hover:text-foreground disabled:opacity-30 transition-colors"
+        >
+          {discovering
+            ? <Loader size={9} className="animate-spin" />
+            : <Search size={9} />}
+          {discovering ? "Discovering…" : "Discover agents"}
+        </button>
+      </div>
+
+      {!discovery && (
+        <p className="text-[11px] text-muted-foreground/50">
+          Run agent discovery to check if the gateway can enumerate available agents.
+        </p>
+      )}
+
+      {discovery && !discovery.discoverable && (
+        <div className="space-y-1">
+          <p className="text-[11px] text-amber-600/80 font-medium">Not discoverable</p>
+          <p className="text-[11px] text-muted-foreground/60 leading-snug">
+            {discovery.reason ?? "Agent listing is not supported by this gateway version."}
+          </p>
+          <p className="text-[10px] text-muted-foreground/40 mt-1">
+            Checked {new Date(discovery.discoveredAt).toLocaleTimeString()}
+          </p>
+        </div>
+      )}
+
+      {discovery && discovery.discoverable && discovery.agents.length === 0 && (
+        <p className="text-[11px] text-muted-foreground/50">
+          Discovery succeeded but no agents were found.
+        </p>
+      )}
+
+      {discovery && discovery.discoverable && discovery.agents.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[11px] text-emerald-600 font-medium">
+            {discovery.agents.length} agent{discovery.agents.length === 1 ? "" : "s"} discovered
+          </p>
+          {discovery.agents.map((a) => (
+            <div key={a.id} className="flex items-center gap-2 py-0.5">
+              <Bot size={11} className="text-muted-foreground/40 shrink-0" />
+              <span className="text-[11px] text-foreground/80 font-medium">{a.name}</span>
+              <span className="text-[10px] text-muted-foreground/40">{a.type}</span>
+              {a.status && (
+                <span className={cn(
+                  "text-[9px] uppercase tracking-wide font-medium",
+                  a.status === "available" ? "text-emerald-500" :
+                  a.status === "busy"      ? "text-amber-500" :
+                  a.status === "offline"   ? "text-muted-foreground/40" :
+                  "text-muted-foreground/30",
+                )}>
+                  {a.status}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function HealthResult({ result }: { result: ProviderHealthResult }) {
   const [expanded, setExpanded] = useState(false);
@@ -260,6 +443,13 @@ export function GraceConnections() {
   const [saved, setSaved] = useState(false);
   const [checking, setChecking] = useState(false);
   const [healthResult, setHealthResult] = useState<ProviderHealthResult | null>(null);
+  const [readiness, setReadiness] = useState<ProviderReadiness | null>(
+    () => readinessService.getLastReadiness(),
+  );
+  const [discovery, setDiscovery] = useState<AgentDiscoveryResult | null>(
+    () => agentDiscoveryService.getLastDiscovery(),
+  );
+  const [discovering, setDiscovering] = useState(false);
   const [cleared, setCleared] = useState(false);
 
   useEffect(() => {
@@ -295,7 +485,22 @@ export function GraceConnections() {
     const provider = providerService.getProvider("openclaw");
     const result = await provider.healthCheck(cfg);
     setHealthResult(result);
+    // Derive and cache readiness from the probe result
+    const r = readinessService.fromHealthResult(result);
+    setReadiness(r);
     setChecking(false);
+  }
+
+  async function handleDiscoverAgents() {
+    const cfg: ProviderConfig = {
+      type: "openclaw",
+      gatewayUrl: gatewayUrl.trim(),
+      authToken: authToken.trim() || undefined,
+    };
+    setDiscovering(true);
+    const result = await agentDiscoveryService.discoverAgents(cfg);
+    setDiscovery(result);
+    setDiscovering(false);
   }
 
   function handleClear() {
@@ -304,6 +509,10 @@ export function GraceConnections() {
     setGatewayUrl("");
     setAuthToken("");
     setHealthResult(null);
+    readinessService.clear();
+    setReadiness(null);
+    agentDiscoveryService.clear();
+    setDiscovery(null);
     setCleared(true);
     setTimeout(() => setCleared(false), 2000);
   }
@@ -420,6 +629,17 @@ export function GraceConnections() {
           </div>
 
           {healthResult && <HealthResult result={healthResult} />}
+          {readiness && <ReadinessCard readiness={readiness} />}
+
+          {/* Agent discovery — show when configured */}
+          {(gatewayUrl.trim() || discovery) && (
+            <AgentDiscoverySection
+              config={{ type: "openclaw", gatewayUrl: gatewayUrl.trim(), authToken: authToken.trim() || undefined }}
+              discovery={discovery}
+              onDiscover={handleDiscoverAgents}
+              discovering={discovering}
+            />
+          )}
 
           <CapabilityMatrix providerType="openclaw" />
         </div>

@@ -112,6 +112,39 @@ export function graceRoutes(): Router {
     }
   });
 
+  // ── Agent discovery ──────────────────────────────────────────────────────
+  // The OpenClaw gateway protocol does not currently expose an agent-listing
+  // endpoint. This route returns an honest "not discoverable" result so the
+  // UI can surface the capability gap clearly without fake data.
+  // When the gateway adds a list/enumerate method, implement it here.
+  router.post("/provider/openclaw/agents", async (req, res) => {
+    const { url } = req.body as { url?: unknown };
+
+    if (!url || typeof url !== "string" || !url.trim()) {
+      res.json({
+        discoverable: false,
+        agents: [],
+        reason: "No gateway URL provided.",
+        discoveredAt: new Date().toISOString(),
+      });
+      return;
+    }
+
+    // Agent enumeration is not yet supported by the current adapter version.
+    // The adapter's GatewayWsClient can send arbitrary requests over the
+    // WebSocket connection, but there is no documented list/agents method in
+    // the current OpenClaw gateway protocol version (v3).
+    // Future: open a WS, send { method: "agents.list", params: {} }, parse result.
+    res.json({
+      discoverable: false,
+      agents: [],
+      reason:
+        "Agent listing is not yet supported by the current OpenClaw gateway protocol (v3). " +
+        "Agents will appear here when the gateway exposes an enumeration endpoint.",
+      discoveredAt: new Date().toISOString(),
+    });
+  });
+
   // ── Run dispatch ─────────────────────────────────────────────────────────
   router.post("/run/dispatch", async (req, res) => {
     const body = req.body as {

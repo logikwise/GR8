@@ -55,6 +55,10 @@ import { GraphCanvas } from "../components/GraphCanvas";
 import type { StudioAgent } from "../components/GraphCanvas";
 import { outputService } from "../outputs/outputService";
 import { inputService } from "../inputs/inputService";
+import { readinessService } from "../providers/readinessService";
+import type { ProviderReadiness } from "../providers/providerTypes";
+import { PreflightModal, ReadinessLabel } from "../components/PreflightModal";
+import { buildPreflightChecks, hasBlockingChecks } from "../components/PreflightModal";
 
 type StudioMode = "landing" | "blueprint" | "instance";
 type CenterTab = "graph" | "flow" | "runtime";
@@ -234,7 +238,7 @@ function StudioHeader({
   mode, blueprint, instance, leftOpen, onToggleLeft,
   centerTab, onCenterTab, onBack, onCreateInstance,
   runRecord, onStartRun, onStopRun, runStarting,
-  providerConnected,
+  providerConnected, readiness,
 }: {
   mode: StudioMode; blueprint?: Blueprint | null; instance?: Instance | null;
   leftOpen: boolean; onToggleLeft: () => void;
@@ -245,6 +249,7 @@ function StudioHeader({
   onStopRun?: () => void;
   runStarting: boolean;
   providerConnected: boolean;
+  readiness: ProviderReadiness | null;
 }) {
   const isRunning = runRecord?.status === "running";
   const displayStatus = runRecord ? runRecord.status : (instance?.status ?? "draft");
@@ -290,20 +295,26 @@ function StudioHeader({
         </span>
       )}
 
-      {/* Provider indicator (instance mode only) */}
+      {/* Provider indicator + readiness (instance mode only) */}
       {mode === "instance" && (
-        <div className={cn(
-          "flex items-center gap-1 text-[10px] shrink-0",
-          providerConnected ? "text-emerald-500/70" : "text-muted-foreground/30",
-        )} title={providerConnected ? "Provider configured" : "No provider configured — go to Connections"}>
-          {providerConnected
-            ? <Plug size={10} />
-            : <WifiOff size={10} />}
-          <span className="hidden sm:inline">
-            {providerConnected
-              ? providerService.getConfig()?.type ?? "provider"
-              : "no provider"}
-          </span>
+        <div
+          className="flex flex-col items-start gap-0 shrink-0"
+          title={providerConnected ? "Provider configured — see readiness below" : "No provider configured — go to Connections"}
+        >
+          <div className={cn(
+            "flex items-center gap-1 text-[10px]",
+            providerConnected ? "text-emerald-500/70" : "text-muted-foreground/30",
+          )}>
+            {providerConnected ? <Plug size={10} /> : <WifiOff size={10} />}
+            <span className="hidden sm:inline">
+              {providerConnected
+                ? providerService.getConfig()?.type ?? "provider"
+                : "no provider"}
+            </span>
+          </div>
+          {providerConnected && (
+            <ReadinessLabel readiness={readiness} />
+          )}
         </div>
       )}
 
@@ -1625,6 +1636,12 @@ export function GraceStudio() {
   const [runRecord, setRunRecord] = useState<RunRecord | null>(null);
   const [runStarting, setRunStarting] = useState(false);
 
+  // Preflight
+  const [preflightOpen, setPreflightOpen] = useState(false);
+  const [readiness, setReadiness] = useState<ProviderReadiness | null>(() =>
+    readinessService.getLastReadiness(),
+  );
+
   // Delete instance
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -1815,11 +1832,20 @@ export function GraceStudio() {
     };
   }, [runRecord?.providerRunId, runRecord?.status, runRecord?.id, instance, instanceId]);
 
-  async function handleStartRun() {
+  /** Show the preflight modal — only dispatches if user confirms */
+  function handleStartRun() {
+    if (!instance || !instanceId) return;
+    setPreflightOpen(true);
+  }
+
+  /** Called by PreflightModal once the user confirms (force=true bypasses blocking checks) */
+  async function handlePreflightConfirm(force: boolean) {
     if (!instance || !instanceId) return;
     if (!providerConnected) return;
 
     setRunStarting(true);
+    setPreflightOpen(false);
+
     const active = providerService.getActive();
     if (!active) { setRunStarting(false); return; }
 
@@ -1843,10 +1869,45 @@ export function GraceStudio() {
       providerRunId: result.providerRunId,
     });
 
-    // Append provider feedback
-    if (result.message) {
+    // ── Classify failure and log a clear message ──────────────────────────────
+    if (result.status === "failed") {
+      const msg = result.message ?? "";
+      let classification = "DISPATCH";
+      let classifiedMsg = msg;
+
+      if (msg.includes("not configured") || msg.includes("gatewayUrl")) {
+        classification = "CONFIG";
+        classifiedMsg = "Provider not configured. Set a gateway URL in Connections.";
+      } else if (msg.includes("timeout") || msg.includes("timed out")) {
+        classification = "TIMEOUT";
+        classifiedMsg = "Dispatch timed out. Backend server may be unreachable.";
+      } else if (msg.includes("pairing") || msg.includes("challenge_only") || msg.includes("approval")) {
+        classification = "PAIRING";
+        classifiedMsg = "Gateway pairing is not approved. Approve this device in OpenClaw.";
+      } else if (msg.includes("401") || msg.includes("403") || msg.includes("Forbidden")) {
+        classification = "AUTH";
+        classifiedMsg = "Authentication or permission failure. Check your auth token.";
+      } else if (msg.includes("HTTP")) {
+        classification = "NETWORK";
+        classifiedMsg = msg;
+      }
+
       runService.appendEvent(run.id, {
-        level: result.status === "failed" ? "warn" : "info",
+        level: "error",
+        tag: classification,
+        message: classifiedMsg,
+      });
+
+      if (force) {
+        runService.appendEvent(run.id, {
+          level: "warn",
+          tag: "GRACE",
+          message: "Run was dispatched with force override (preflight checks were bypassed).",
+        });
+      }
+    } else if (result.message) {
+      runService.appendEvent(run.id, {
+        level: "info",
         tag: "PROVIDER",
         message: result.message,
       });
@@ -1948,6 +2009,7 @@ export function GraceStudio() {
         onStopRun={handleStopRun}
         runStarting={runStarting}
         providerConnected={providerConnected}
+        readiness={readiness}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -1992,6 +2054,16 @@ export function GraceStudio() {
           onCreated={handleInstanceCreated}
         />
       )}
+
+      {/* Preflight readiness modal — shown before every Start Run attempt */}
+      <PreflightModal
+        open={preflightOpen}
+        onClose={() => setPreflightOpen(false)}
+        instance={instance}
+        readiness={readiness}
+        onConfirmRun={handlePreflightConfirm}
+        runStarting={runStarting}
+      />
 
       <ConfirmDialog
         open={deleteOpen}

@@ -22,11 +22,132 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { Bot, AlertTriangle } from "lucide-react";
 import type { Blueprint, BlueprintQuestion, AgentRequirement } from "../blueprints/blueprintTypes";
 import type { AnsweredQuestion, AgentAssignment } from "../instances/instanceTypes";
 import { instanceService } from "../instances/instanceService";
 import type { CreateInstancePayload } from "../instances/instanceService";
 import type { Instance } from "../instances/instanceTypes";
+import { agentDiscoveryService } from "../providers/agentDiscoveryService";
+import type { DiscoveredAgent } from "../providers/providerTypes";
+
+// ─── Agent binding step ───────────────────────────────────────────────────────
+
+function AgentBindingStep({
+  agentReqs,
+  agentAssignments,
+  onSetAgent,
+}: {
+  agentReqs: AgentRequirement[];
+  agentAssignments: Record<string, string>;
+  onSetAgent: (key: string, value: string) => void;
+}) {
+  const discovery = agentDiscoveryService.getLastDiscovery();
+  const discoveredAgents: DiscoveredAgent[] = discovery?.agents ?? [];
+  const hasAgents = discoveredAgents.length > 0;
+
+  return (
+    <div className="space-y-4">
+      {/* Discovery context banner */}
+      {!hasAgents && (
+        <div className={cn(
+          "rounded border px-3 py-2 text-[11px] leading-snug",
+          discovery?.discoverable === false
+            ? "border-amber-500/25 bg-amber-500/5 text-amber-700/80"
+            : "border-border bg-muted/20 text-muted-foreground",
+        )}>
+          <div className="flex items-start gap-1.5">
+            <AlertTriangle size={11} className="shrink-0 mt-0.5 text-amber-500/80" />
+            <div>
+              <p className="font-medium">No agents discovered yet</p>
+              {discovery?.reason
+                ? <p className="mt-0.5 text-[10px] opacity-70">{discovery.reason}</p>
+                : <p className="mt-0.5 text-[10px] opacity-70">
+                    Run agent discovery in Connections to see available agents, or enter an identifier manually below.
+                  </p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Per-role pickers */}
+      {agentReqs.map((req) => {
+        const key = req.role + "-" + req.label;
+        return (
+          <div key={key} className="space-y-1.5">
+            <label className="block text-sm font-medium text-foreground">
+              {req.label}
+              {req.required && <span className="text-destructive ml-0.5">*</span>}
+              <span className="ml-2 text-[10px] font-normal text-muted-foreground uppercase">
+                {req.role}
+              </span>
+            </label>
+            {req.description && (
+              <p className="text-xs text-muted-foreground">{req.description}</p>
+            )}
+
+            {/* Picker when agents are available */}
+            {hasAgents ? (
+              <div className="space-y-1">
+                <div className="grid gap-1">
+                  {discoveredAgents.map((a) => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => onSetAgent(key, a.name)}
+                      className={cn(
+                        "w-full flex items-center gap-2 rounded border px-2.5 py-2 text-xs text-left transition-all",
+                        agentAssignments[key] === a.name
+                          ? "border-[var(--grace-accent)] bg-[var(--grace-accent-muted)] text-[var(--grace-accent)]"
+                          : "border-border bg-card hover:border-[var(--grace-accent)]/40 text-foreground/80",
+                      )}
+                    >
+                      <Bot size={12} className="shrink-0" />
+                      <span className="font-medium">{a.name}</span>
+                      <span className="text-muted-foreground/50 text-[10px]">{a.type}</span>
+                      {a.status && a.status !== "unknown" && (
+                        <span className={cn(
+                          "ml-auto text-[9px] uppercase font-medium",
+                          a.status === "available" ? "text-emerald-500" :
+                          a.status === "busy"      ? "text-amber-500" :
+                          "text-muted-foreground/30",
+                        )}>
+                          {a.status}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                {/* Manual override */}
+                <p className="text-[10px] text-muted-foreground/40 pt-1">Or type a custom identifier:</p>
+                <Input
+                  value={agentAssignments[key] ?? ""}
+                  onChange={(e) => onSetAgent(key, e.target.value)}
+                  placeholder="Agent name or ID"
+                  className="text-xs"
+                />
+              </div>
+            ) : (
+              <Input
+                value={agentAssignments[key] ?? ""}
+                onChange={(e) => onSetAgent(key, e.target.value)}
+                placeholder="Agent name or identifier"
+              />
+            )}
+
+            {req.capabilities && req.capabilities.length > 0 && (
+              <p className="text-[10px] text-muted-foreground/70">
+                Recommended capabilities: {req.capabilities.join(", ")}
+              </p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Wizard ───────────────────────────────────────────────────────────────────
 
 type Step = "name" | "questions" | "agents" | "confirm";
 
@@ -260,39 +381,11 @@ export function CreateInstanceModal({ blueprint, open, onClose, onCreated }: Cre
           )}
 
           {currentStep === "agents" && (
-            <div className="space-y-4">
-              <p className="text-xs text-muted-foreground">
-                Assign agents to the required roles for this Instance.
-                {/* TODO (Phase 3): Replace with real agent-picker from GET /api/agents */}
-              </p>
-              {allAgentReqs.map((req) => {
-                const key = req.role + "-" + req.label;
-                return (
-                  <div key={key} className="space-y-1.5">
-                    <label className="block text-sm font-medium text-foreground">
-                      {req.label}
-                      {req.required && <span className="text-destructive ml-0.5">*</span>}
-                      <span className="ml-2 text-[10px] font-normal text-muted-foreground uppercase">
-                        {req.role}
-                      </span>
-                    </label>
-                    {req.description && (
-                      <p className="text-xs text-muted-foreground">{req.description}</p>
-                    )}
-                    <Input
-                      value={agentAssignments[key] ?? ""}
-                      onChange={(e) => setAgent(key, e.target.value)}
-                      placeholder="Agent name or identifier"
-                    />
-                    {req.capabilities && req.capabilities.length > 0 && (
-                      <p className="text-[10px] text-muted-foreground/70">
-                        Recommended capabilities: {req.capabilities.join(", ")}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            <AgentBindingStep
+              agentReqs={allAgentReqs}
+              agentAssignments={agentAssignments}
+              onSetAgent={setAgent}
+            />
           )}
 
           {currentStep === "confirm" && (
