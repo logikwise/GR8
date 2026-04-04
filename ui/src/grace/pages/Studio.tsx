@@ -1639,12 +1639,6 @@ export function GraceStudio() {
     if (tab === "runtime") setSelectedStep(null);
   }
 
-  // Auto-switch to Runtime tab when run is active (instance mode only)
-  useEffect(() => {
-    if (runRecord?.status === "running" && centerTab === "flow") {
-      setCenterTab("runtime");
-    }
-  }, [runRecord?.status]);
 
   // Blueprint mode never shows Runtime — reset if somehow selected
   useEffect(() => {
@@ -1850,7 +1844,6 @@ export function GraceStudio() {
 
     setRunRecord(runService.getById(run.id));
     setRunStarting(false);
-    setCenterTab("runtime");
   }
 
   function handleStopRun() {
