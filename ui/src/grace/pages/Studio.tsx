@@ -48,6 +48,7 @@ import { cn } from "@/lib/utils";
 import { FlowStepCard } from "../components/FlowStepCard";
 import type { FlowStep } from "../components/FlowStepCard";
 import { StepInspector } from "../components/StepInspector";
+import { AgentInspector } from "../components/AgentInspector";
 import { FlowCanvas } from "../components/FlowCanvas";
 import type { StepStatusMap } from "../components/FlowCanvas";
 import { GraphCanvas } from "../components/GraphCanvas";
@@ -848,7 +849,42 @@ function CenterCanvas({
   runRecord: RunRecord | null;
   onOpenBottomTab?: (tab: BottomTab) => void;
 }) {
-  const [infoPanelOpen, setInfoPanelOpen] = useState(true);
+  const [infoPanelOpen,  setInfoPanelOpen]  = useState(true);
+  const [selectedAgent,  setSelectedAgent]  = useState<StudioAgent | null>(null);
+  const [activeSkillId,  setActiveSkillId]  = useState<string | null>(null);
+  const [activeToolId,   setActiveToolId]   = useState<string | null>(null);
+
+  function handleAgentInspect(agent: StudioAgent) {
+    setSelectedAgent(agent);
+    onInspectorClose(); // deselect step
+  }
+
+  function handleStepInspect(step: FlowStep) {
+    setSelectedAgent(null); // deselect agent
+    onInspect(step);
+  }
+
+  function handleInspectorClose() {
+    setSelectedAgent(null);
+    setActiveSkillId(null);
+    setActiveToolId(null);
+    onInspectorClose();
+  }
+
+  function handleSkillClick(skillId: string) {
+    // Toggle: click same again clears it
+    const next = activeSkillId === skillId ? null : skillId;
+    setActiveSkillId(next);
+    setActiveToolId(null);
+    if (next) onOpenBottomTab?.("skills");
+  }
+
+  function handleToolClick(toolId: string) {
+    const next = activeToolId === toolId ? null : toolId;
+    setActiveToolId(next);
+    setActiveSkillId(null);
+    if (next) onOpenBottomTab?.("tools");
+  }
 
   if (mode === "landing") return <LandingCanvas />;
 
@@ -894,7 +930,10 @@ function CenterCanvas({
                 steps={steps}
                 agents={agents}
                 stepStatuses={stepStatuses}
-                onStepInspect={onInspect}
+                onStepInspect={handleStepInspect}
+                onAgentInspect={handleAgentInspect}
+                activeSkillId={activeSkillId}
+                activeToolId={activeToolId}
               />
             </div>
           )}
@@ -931,11 +970,21 @@ function CenterCanvas({
           </div>
         )}
 
-        {selectedStep && (
+        {selectedAgent && (
+          <AgentInspector
+            agent={selectedAgent}
+            onClose={handleInspectorClose}
+          />
+        )}
+        {selectedStep && !selectedAgent && (
           <StepInspector
             step={selectedStep}
             stepIndex={steps.findIndex((s) => s.id === selectedStep.id)}
-            onClose={onInspectorClose}
+            onClose={handleInspectorClose}
+            onSkillClick={handleSkillClick}
+            onToolClick={handleToolClick}
+            activeSkillId={activeSkillId}
+            activeToolId={activeToolId}
           />
         )}
       </div>
@@ -1616,19 +1665,20 @@ export function GraceStudio() {
     if (mode === "blueprint" && blueprint) {
       const agents: StudioAgent[] = [];
       if (blueprint.agentConfig.primary) {
-        agents.push({ id: "primary", label: blueprint.agentConfig.primary.label, role: blueprint.agentConfig.primary.role, linked: false });
+        agents.push({ id: "primary", label: blueprint.agentConfig.primary.label, role: blueprint.agentConfig.primary.role, linked: false, isPrimary: true });
       }
       blueprint.agentConfig.specialists?.forEach((sp, i) => {
-        agents.push({ id: `specialist-${i}`, label: sp.label, role: sp.role, linked: false });
+        agents.push({ id: `specialist-${i}`, label: sp.label, role: sp.role, linked: false, isPrimary: false });
       });
       return agents;
     }
     if (mode === "instance" && instance) {
-      return instance.agentAssignments.map((a) => ({
+      return instance.agentAssignments.map((a, i) => ({
         id: a.agentId || `${a.role}-${a.label}`,
         label: a.agentName || a.label,
         role: a.role,
         linked: !!a.agentId,
+        isPrimary: i === 0,
       }));
     }
     return [];

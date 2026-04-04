@@ -27,6 +27,7 @@ export interface StudioAgent {
   label: string;
   role: string;
   linked: boolean;
+  isPrimary?: boolean;
 }
 
 interface GraphNode {

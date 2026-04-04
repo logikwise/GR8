@@ -17,6 +17,14 @@ interface StepInspectorProps {
   /** 0-based index of the step in the current steps array */
   stepIndex?: number;
   onClose: () => void;
+  /** Called when a skill chip is clicked; passes skillId */
+  onSkillClick?: (skillId: string) => void;
+  /** Called when a tool chip is clicked; passes toolId */
+  onToolClick?: (toolId: string) => void;
+  /** Currently highlighted skill id (expanded in canvas) */
+  activeSkillId?: string | null;
+  /** Currently highlighted tool id (expanded in canvas) */
+  activeToolId?: string | null;
   className?: string;
 }
 
@@ -29,30 +37,40 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 function Chip({
-  icon,
-  label,
-  accent,
+  icon, label, accent, active, onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   accent?: boolean;
+  active?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <span
+    <button
+      type="button"
+      onClick={onClick}
       className={cn(
-        "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] border",
-        accent
-          ? "border-[var(--grace-accent)]/25 bg-[var(--grace-accent-muted)] text-[var(--grace-accent)]"
-          : "border-border bg-muted/40 text-muted-foreground",
+        "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] border transition-colors",
+        onClick ? "cursor-pointer" : "cursor-default",
+        active
+          ? "border-[var(--grace-accent)]/60 bg-[var(--grace-accent)]/20 text-[var(--grace-accent)] shadow-sm"
+          : accent
+          ? "border-[var(--grace-accent)]/25 bg-[var(--grace-accent-muted)] text-[var(--grace-accent)] hover:bg-[var(--grace-accent)]/20"
+          : "border-border bg-muted/40 text-muted-foreground hover:bg-muted/70",
       )}
     >
       {icon}
       {label}
-    </span>
+    </button>
   );
 }
 
-export function StepInspector({ step, stepIndex, onClose, className }: StepInspectorProps) {
+export function StepInspector({
+  step, stepIndex, onClose,
+  onSkillClick, onToolClick,
+  activeSkillId, activeToolId,
+  className,
+}: StepInspectorProps) {
   if (!step) return null;
 
   const stepNum = stepIndex !== undefined ? stepIndex + 1 : null;
@@ -115,10 +133,24 @@ export function StepInspector({ step, stepIndex, onClose, className }: StepInspe
         {/* Skills */}
         {step.skills && step.skills.length > 0 && (
           <div>
-            <SectionLabel>Skills ({step.skills.length})</SectionLabel>
+            <SectionLabel>
+              Skills ({step.skills.length})
+              {onSkillClick && (
+                <span className="ml-1 normal-case font-normal text-muted-foreground/30 tracking-normal">
+                  — click to highlight
+                </span>
+              )}
+            </SectionLabel>
             <div className="flex flex-wrap gap-1.5">
               {step.skills.map((s) => (
-                <Chip key={s.id} icon={<Zap size={8} />} label={s.name} accent />
+                <Chip
+                  key={s.id}
+                  icon={<Zap size={8} />}
+                  label={s.name}
+                  accent
+                  active={activeSkillId === s.id}
+                  onClick={onSkillClick ? () => onSkillClick(s.id) : undefined}
+                />
               ))}
             </div>
           </div>
@@ -127,10 +159,23 @@ export function StepInspector({ step, stepIndex, onClose, className }: StepInspe
         {/* Tools */}
         {step.tools && step.tools.length > 0 && (
           <div>
-            <SectionLabel>Tools ({step.tools.length})</SectionLabel>
+            <SectionLabel>
+              Tools ({step.tools.length})
+              {onToolClick && (
+                <span className="ml-1 normal-case font-normal text-muted-foreground/30 tracking-normal">
+                  — click to highlight
+                </span>
+              )}
+            </SectionLabel>
             <div className="flex flex-wrap gap-1.5">
               {step.tools.map((t) => (
-                <Chip key={t.id} icon={<Wrench size={8} />} label={t.name} />
+                <Chip
+                  key={t.id}
+                  icon={<Wrench size={8} />}
+                  label={t.name}
+                  active={activeToolId === t.id}
+                  onClick={onToolClick ? () => onToolClick(t.id) : undefined}
+                />
               ))}
             </div>
           </div>
