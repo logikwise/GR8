@@ -323,55 +323,44 @@ function StepNode({ data }: { data: StepNodeData }) {
 
 // ─── Agent Node ───────────────────────────────────────────────────────────────
 
-const DOT_AGENT_COLLAPSED = 10;
-const DOT_AGENT_EXPANDED  = 28;
+const DOT_AGENT_EXPANDED = 28;
 
 function AgentOrbiters({
-  subAgents, expanded, onToggle, onInspect,
+  subAgents, onInspect,
 }: {
   subAgents: StudioAgent[];
-  expanded: boolean;
-  onToggle: () => void;
   onInspect: (agent: StudioAgent) => void;
 }) {
   if (subAgents.length === 0) return null;
   const color = SUB_AGENT_COLOR;
   return (
     <div
-      style={{ display: "flex", alignItems: "flex-start", justifyContent: "center", gap: expanded ? 6 : 4, marginTop: 6, cursor: "pointer" }}
-      title={expanded ? "Collapse sub-agents" : subAgents.map((a) => a.label).join(", ")}
-      onClick={(e) => { e.stopPropagation(); onToggle(); }}
+      style={{ display: "flex", alignItems: "flex-start", justifyContent: "center", gap: 6, marginTop: 6 }}
     >
       {subAgents.map((sub) => (
         <div
           key={sub.id}
-          style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}
-          onClick={(e) => { if (expanded) { e.stopPropagation(); onInspect(sub); } }}
+          style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, cursor: "pointer" }}
+          onClick={(e) => { e.stopPropagation(); onInspect(sub); }}
         >
           <div style={{
-            width:  expanded ? DOT_AGENT_EXPANDED  : DOT_AGENT_COLLAPSED,
-            height: expanded ? DOT_AGENT_EXPANDED  : DOT_AGENT_COLLAPSED,
+            width: DOT_AGENT_EXPANDED, height: DOT_AGENT_EXPANDED,
             borderRadius: "50%",
-            background: expanded ? `rgba(${hexToRgb(color)},0.12)` : color,
-            border:  expanded ? `1.5px solid ${color}` : "none",
+            background: `rgba(${hexToRgb(color)},0.12)`,
+            border: `1.5px solid ${color}`,
             display: "flex", alignItems: "center", justifyContent: "center",
-            transition: "all 0.18s ease",
             flexShrink: 0,
           }}>
-            {expanded && (
-              <span style={{ fontSize: 11, fontWeight: 800, color, lineHeight: 1 }}>
-                {sub.label.charAt(0).toUpperCase()}
-              </span>
-            )}
-          </div>
-          {expanded && (
-            <span style={{
-              fontSize: 7, color, fontWeight: 600, textAlign: "center",
-              maxWidth: 38, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}>
-              {trunc(sub.label, 8)}
+            <span style={{ fontSize: 11, fontWeight: 800, color, lineHeight: 1 }}>
+              {sub.label.charAt(0).toUpperCase()}
             </span>
-          )}
+          </div>
+          <span style={{
+            fontSize: 7, color, fontWeight: 600, textAlign: "center",
+            maxWidth: 38, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
+            {trunc(sub.label, 8)}
+          </span>
         </div>
       ))}
     </div>
@@ -383,7 +372,6 @@ function AgentNode({ data }: { data: AgentNodeData }) {
   const color = PRIMARY_AGENT_COLOR;
   const size  = PRIMARY_SIZE;
 
-  const [orbitersOpen, setOrbitersOpen] = useState(false);
 
   return (
     <div
@@ -429,11 +417,9 @@ function AgentNode({ data }: { data: AgentNodeData }) {
         {trunc(agent.label, 12)}
       </div>
 
-      {/* Sub-agent orbiters */}
+      {/* Sub-agent orbiters — always expanded */}
       <AgentOrbiters
         subAgents={subAgents}
-        expanded={orbitersOpen}
-        onToggle={() => setOrbitersOpen((v) => !v)}
         onInspect={onInspect}
       />
     </div>

@@ -58,9 +58,9 @@ function Chip({
             ? "border-amber-500/60 bg-amber-500/20 text-amber-400 shadow-sm"
             : "border-amber-500/25 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
           : active
-          ? "border-[var(--grace-accent)]/60 bg-[var(--grace-accent)]/20 text-[var(--grace-accent)] shadow-sm"
+          ? "border-violet-500/60 bg-violet-500/20 text-violet-400 shadow-sm"
           : accent
-          ? "border-[var(--grace-accent)]/25 bg-[var(--grace-accent-muted)] text-[var(--grace-accent)] hover:bg-[var(--grace-accent)]/20"
+          ? "border-violet-500/25 bg-violet-500/10 text-violet-400 hover:bg-violet-500/20"
           : "border-border bg-muted/40 text-muted-foreground hover:bg-muted/70",
       )}
     >
