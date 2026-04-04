@@ -173,6 +173,7 @@ export function StepInspector({
                   key={t.id}
                   icon={<Wrench size={8} />}
                   label={t.name}
+                  accent
                   active={activeToolId === t.id}
                   onClick={onToolClick ? () => onToolClick(t.id) : undefined}
                 />
