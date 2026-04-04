@@ -1,0 +1,112 @@
+## Post-MVP Refactor Requirement — Core Decoupling from Paperclip
+
+After MVP is validated and stable, a dedicated refactor phase must be executed to fully remove legacy Paperclip naming and protocol coupling from the system.
+
+### Current State (MVP)
+
+The system uses a **translation/compatibility layer**:
+
+* Neutral `APP_*` context fields (APP_RUN_ID, APP_INSTANCE_ID, etc.)
+* User-facing messaging is fully de-Paperclipped
+* Adapter/runtime internals still depend on:
+
+  * `PAPERCLIP_*` environment variables
+  * `paperclip:run:<id>` session keys
+  * `companyId` field naming
+  * `@paperclipai/*` package namespace
+
+This is intentional to preserve execution stability.
+
+---
+
+### Post-MVP Goal
+
+Move from:
+
+```
+Neutral Layer → Paperclip Compatibility → OpenClaw
+```
+
+To:
+
+```
+Native Runtime Layer → OpenClaw (or provider abstraction)
+```
+
+---
+
+### Required Refactor Areas
+
+#### 1. Environment / Context Variables
+
+* Replace all `PAPERCLIP_*` with native equivalents (e.g., `APP_*` or `RUNTIME_*`)
+* Ensure agents no longer depend on Paperclip-specific env naming
+
+#### 2. Session / Keying Model
+
+* Replace `paperclip:run:<id>` with neutral format:
+
+  * `run:<id>` or `runtime:<id>`
+* Update gateway/session handling accordingly
+
+#### 3. Adapter Contracts
+
+* Remove `companyId` requirement or rename to `workspaceId`
+* Extend adapter types instead of conforming to legacy schema
+
+#### 4. Wake / Instruction Payload
+
+* Replace “Paperclip wake event…” with a neutral runtime instruction format
+* Define a formal runtime contract for agents (versioned)
+
+#### 5. Package / Namespace Decoupling
+
+* Replace `@paperclipai/*` dependencies with:
+
+  * internal packages, or
+  * provider-agnostic adapter layer
+* Avoid hard dependency on original publisher namespace
+
+#### 6. Provider Interface Finalization
+
+* Formalize provider contract:
+
+  * dispatch
+  * polling/streaming
+  * chat (optional)
+  * agent discovery
+  * outputs
+* Ensure OpenClaw, Claude, Codex, Hermes can all plug in cleanly
+
+---
+
+### Important Constraint
+
+This refactor **must not begin until:**
+
+* MVP run flow is stable end-to-end
+* Studio interaction model is finalized
+* Provider integration (OpenClaw) is verified working in production scenarios
+
+---
+
+### Guiding Principle
+
+MVP prioritizes:
+
+> Stability via compatibility
+
+Post-MVP prioritizes:
+
+> Ownership via full decoupling
+
+---
+
+### Outcome
+
+After this phase:
+
+* No Paperclip terminology or structures remain
+* Runtime becomes first-class and product-owned
+* Providers become true interchangeable modules
+* Future branding and architecture changes become trivial
