@@ -699,6 +699,7 @@ function WorkflowInfoCard({
 
   const categoryLabel = mode === "blueprint" ? "BLUEPRINT" : "WORKFLOW";
   const version = blueprint?.version;
+  const [expanded, setExpanded] = useState(false);
 
   const MAX_PILLS = 4;
 
@@ -748,69 +749,86 @@ function WorkflowInfoCard({
   }
 
   return (
-    <div className="rounded-xl border border-border/60 bg-card/95 backdrop-blur-md shadow-2xl p-4 w-72">
-      {/* Header row */}
-      <div className="flex items-start justify-between mb-3">
-        <span className="text-[9px] tracking-[0.2em] uppercase text-[var(--grace-accent)] font-semibold">
-          {categoryLabel}
-        </span>
-        <button type="button" onClick={onClose}
-          className="text-muted-foreground/30 hover:text-muted-foreground transition-colors -mt-0.5 -mr-0.5">
-          <X size={13} />
-        </button>
-      </div>
-
-      {/* Name */}
-      <h2 className="text-xl font-bold leading-tight tracking-tight text-foreground mb-1">
-        {name}
-      </h2>
-
-      {/* Description */}
-      {description ? (
-        <p className="text-[11px] text-muted-foreground/70 leading-relaxed mb-4 line-clamp-3">
-          {description}
-        </p>
-      ) : (
-        <div className="mb-4" />
-      )}
-
-      {/* Agent + skill + tool sections */}
-      <div className="space-y-3">
-        <Section
-          label="Agents"
-          items={usedAgents.map((a) => a.label)}
-          tab={undefined}
-        />
-        <Section
-          label="Skills"
-          items={allSkills.map((s) => s.name)}
-          tab="skills"
-        />
-        <Section
-          label="Tools"
-          items={allTools.map((t) => t.name)}
-          tab="tools"
-        />
-      </div>
-
-      {/* Footer row */}
-      <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between">
-        <div className="flex items-center gap-3 text-[10px] text-muted-foreground/50">
-          <span className="flex items-center gap-1">
-            <ListChecks size={9} /> {steps.length} step{steps.length !== 1 ? "s" : ""}
+    <div className="rounded-xl border border-border/60 bg-card/95 backdrop-blur-md shadow-2xl w-72 overflow-hidden">
+      {/* ── Collapsed header (always visible) ── */}
+      <div className="p-4 pb-3">
+        <div className="flex items-start justify-between mb-1.5">
+          <span className="text-[9px] tracking-[0.2em] uppercase text-[var(--grace-accent)] font-semibold">
+            {categoryLabel}
           </span>
-          {version && (
-            <span className="flex items-center gap-1">
-              <GitBranch size={9} /> v{version}
-            </span>
-          )}
+          <div className="flex items-center gap-1 -mt-0.5 -mr-0.5">
+            {/* Expand / collapse toggle */}
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="text-muted-foreground/40 hover:text-muted-foreground transition-colors p-0.5"
+              title={expanded ? "Collapse" : "Expand"}
+            >
+              {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            </button>
+            <button type="button" onClick={onClose}
+              className="text-muted-foreground/30 hover:text-muted-foreground transition-colors p-0.5">
+              <X size={13} />
+            </button>
+          </div>
         </div>
-        <button type="button"
-          onClick={() => onOpenTab?.("steps")}
-          className="flex items-center gap-1 text-[10px] text-[var(--grace-accent)]/70 hover:text-[var(--grace-accent)] transition-colors font-medium">
-          View steps <ChevronRight size={9} />
-        </button>
+
+        {/* Name */}
+        <h2 className="text-xl font-bold leading-tight tracking-tight text-foreground mb-1">
+          {name}
+        </h2>
+
+        {/* Description — always visible */}
+        {description ? (
+          <p className={cn(
+            "text-[11px] text-muted-foreground/70 leading-relaxed",
+            expanded ? "line-clamp-none" : "line-clamp-2",
+          )}>
+            {description}
+          </p>
+        ) : null}
       </div>
+
+      {/* ── Expanded content ── */}
+      {expanded && (
+        <div className="px-4 pb-4 border-t border-border/30 pt-3 space-y-3">
+          {/* Agent + skill + tool sections */}
+          <Section
+            label="Agents"
+            items={usedAgents.map((a) => a.label)}
+            tab={undefined}
+          />
+          <Section
+            label="Skills"
+            items={allSkills.map((s) => s.name)}
+            tab="skills"
+          />
+          <Section
+            label="Tools"
+            items={allTools.map((t) => t.name)}
+            tab="tools"
+          />
+
+          {/* Footer row */}
+          <div className="pt-2 border-t border-border/40 flex items-center justify-between">
+            <div className="flex items-center gap-3 text-[10px] text-muted-foreground/50">
+              <span className="flex items-center gap-1">
+                <ListChecks size={9} /> {steps.length} step{steps.length !== 1 ? "s" : ""}
+              </span>
+              {version && (
+                <span className="flex items-center gap-1">
+                  <GitBranch size={9} /> v{version}
+                </span>
+              )}
+            </div>
+            <button type="button"
+              onClick={() => onOpenTab?.("steps")}
+              className="flex items-center gap-1 text-[10px] text-[var(--grace-accent)]/70 hover:text-[var(--grace-accent)] transition-colors font-medium">
+              View steps <ChevronRight size={9} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

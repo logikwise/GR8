@@ -1,34 +1,27 @@
 /**
- * FlowCanvas — Phase 9+ (circle node redesign)
+ * FlowCanvas — circle nodes, inline agents, expandable skill/tool dots
  *
- * All node types are circles:
- *   ┌──────────────────┐
- *   │  TYPE  or  Step N │  ← small label ABOVE circle
- *   │  ┌────────────┐   │
- *   │  │ icon/init  │   │  ← circle with icon or initials
- *   │  └────────────┘   │
- *   │    node name       │  ← name BELOW circle
- *   └──────────────────┘
+ * Layout:
+ *   [AGENT]──[AGENT]──── Step 1 ──── Step 2 ──── Step 3
+ *   All in one horizontal row.
  *
- * Node types:
- *   stepNode   — violet/status color  — "Step N" above, agentRole as sub-label
- *   agentNode  — blue                 — "AGENT" above
- *   skillNode  — violet               — "SKILL" above
- *   toolNode   — amber                — "TOOL" above
+ * Step nodes:
+ *   - Circle with 2-letter initials
+ *   - "Step N" + agentRole above
+ *   - Name below
+ *   - Skill dots (violet) above circle, clickable to expand
+ *   - Tool dots (amber) below circle, clickable to expand
  *
- * Step status → circle color:
- *   idle:      #475569  ready: #0ea5e9  running: #22c55e (pulse)
- *   waiting:   #f59e0b  completed: #3b82f6  failed: #ef4444
+ * Agent nodes:
+ *   - Circle with monogram, inline with steps to the left
+ *   - Connected with same-style horizontal edges
  *
- * Features:
- *   - Pan / drag / zoom (ReactFlow)
- *   - fitView on load
- *   - MiniMap, Controls, Background (dots)
- *   - "Reset to row" button (top-right)
- *   - Status pulse ring on running steps
+ * Canvas controls:
+ *   - Reset layout button (top-right)
+ *   - Minimap toggle (bottom-right) — starts hidden
  */
 
-import { useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import ReactFlow, {
   useNodesState,
   useEdgesState,
@@ -46,16 +39,14 @@ import ReactFlow, {
   ReactFlowProvider,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { AlignHorizontalDistributeCenter } from "lucide-react";
+import { AlignHorizontalDistributeCenter, Map } from "lucide-react";
 import type { FlowStep } from "./FlowStepCard";
 import type { StudioAgent } from "./GraphCanvas";
 import type { StepStatus } from "../providers/providerTypes";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface StepStatusMap {
-  [stepId: string]: StepStatus;
-}
+export interface StepStatusMap { [stepId: string]: StepStatus }
 
 interface FlowCanvasProps {
   steps: FlowStep[];
@@ -71,25 +62,11 @@ interface StepNodeData {
   onInspect: (step: FlowStep) => void;
 }
 
-interface AgentNodeData {
-  label: string;
-  role: string;
-  linked: boolean;
-}
-
-interface SkillNodeData {
-  label: string;
-  parentStepId: string;
-}
-
-interface ToolNodeData {
-  label: string;
-  parentStepId: string;
-}
+interface AgentNodeData { label: string; role: string; linked: boolean }
 
 // ─── Colors ───────────────────────────────────────────────────────────────────
 
-const STEP_STATUS_COLOR: Record<StepStatus, string> = {
+const STATUS_COLOR: Record<StepStatus, string> = {
   idle:         "#475569",
   ready:        "#0ea5e9",
   running:      "#22c55e",
@@ -99,287 +76,273 @@ const STEP_STATUS_COLOR: Record<StepStatus, string> = {
   failed:       "#ef4444",
 };
 
-// ─── Shared helpers ───────────────────────────────────────────────────────────
+const SKILL_COLOR = "#8b5cf6";
+const TOOL_COLOR  = "#f59e0b";
 
-/** Up to 2-letter initials from a name string */
-function initials(name: string): string {
-  const words = name.trim().split(/\s+/);
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return (words[0][0] + words[1][0]).toUpperCase();
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Truncate a string to max chars with ellipsis */
-function trunc(s: string, max = 14): string {
-  return s.length > max ? s.slice(0, max - 1) + "…" : s;
-}
-
-// ─── Layout constants ─────────────────────────────────────────────────────────
-
-const STEP_SIZE        = 68;   // step circle diameter
-const STEP_SPACING     = 140;  // horizontal distance between step node origins
-const AGENT_SIZE       = 60;   // agent circle diameter
-const AGENT_GAP        = 20;
-const AGENT_OFFSET_X   = 0;
-const AGENT_OFFSET_Y   = -(AGENT_SIZE + 80); // well above step row
-const SKILL_SIZE       = 44;
-const SKILL_OFFSET_Y   = 140;  // below step row
-const SKILL_SPACING    = 60;
-
-// ─── Shared circle wrapper ────────────────────────────────────────────────────
-
-/**
- * A column-flex wrapper: [label above] [circle] [name below]
- * Children go inside the circle div.
- */
-function CircleNode({
-  size,
-  color,
-  borderStyle = "solid",
-  bgAlpha = 0.12,
-  pulse = false,
-  aboveLines,
-  name,
-  children,
-  onClick,
-}: {
-  size: number;
-  color: string;
-  borderStyle?: "solid" | "dashed";
-  bgAlpha?: number;
-  pulse?: boolean;
-  aboveLines: React.ReactNode;
-  name: string;
-  children: React.ReactNode;
-  onClick?: () => void;
-}) {
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        cursor: onClick ? "pointer" : "default",
-        userSelect: "none",
-      }}
-    >
-      {/* Label(s) above */}
-      <div style={{
-        marginBottom: 5,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 1,
-        minHeight: 22,
-      }}>
-        {aboveLines}
-      </div>
-
-      {/* Circle */}
-      <div style={{
-        width: size,
-        height: size,
-        borderRadius: "50%",
-        border: `2px solid ${color}`,
-        borderStyle,
-        background: `rgba(${hexToRgb(color)},${bgAlpha})`,
-        boxShadow: pulse
-          ? `0 0 0 4px ${color}30, 0 0 16px ${color}30`
-          : `0 0 0 3px ${color}14, 0 2px 8px rgba(0,0,0,0.22)`,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        position: "relative",
-        flexShrink: 0,
-        transition: "box-shadow 0.2s, border-color 0.2s",
-      }}>
-        {pulse && (
-          <span style={{
-            position: "absolute",
-            inset: -5,
-            borderRadius: "50%",
-            border: `2px solid ${color}`,
-            opacity: 0.45,
-            animation: "flowPulse 1.4s ease-in-out infinite",
-            pointerEvents: "none",
-          }} />
-        )}
-        {children}
-      </div>
-
-      {/* Name below */}
-      <div style={{
-        marginTop: 6,
-        fontSize: 9,
-        fontWeight: 600,
-        color: "var(--foreground)",
-        opacity: 0.75,
-        textAlign: "center",
-        maxWidth: size + 28,
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
-        lineHeight: 1.3,
-      }}>
-        {trunc(name, 16)}
-      </div>
-    </div>
-  );
-}
-
-/** Convert 6-char hex (#rrggbb) to "r,g,b" for rgba() */
 function hexToRgb(hex: string): string {
   const h = hex.replace("#", "");
   const r = parseInt(h.slice(0, 2), 16);
   const g = parseInt(h.slice(2, 4), 16);
   const b = parseInt(h.slice(4, 6), 16);
-  if (isNaN(r)) return "100,116,139"; // fallback slate
-  return `${r},${g},${b}`;
+  return isNaN(r) ? "100,116,139" : `${r},${g},${b}`;
 }
 
-// ─── Tiny label helpers ───────────────────────────────────────────────────────
-
-function TypeLabel({ text, color }: { text: string; color: string }) {
-  return (
-    <span style={{
-      fontSize: 8,
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: "0.12em",
-      color,
-      opacity: 0.8,
-      whiteSpace: "nowrap",
-    }}>
-      {text}
-    </span>
-  );
+function initials(name: string): string {
+  const words = name.trim().split(/\s+/);
+  return words.length === 1
+    ? words[0].slice(0, 2).toUpperCase()
+    : (words[0][0] + words[1][0]).toUpperCase();
 }
 
-function StepNumLabel({ n }: { n: number }) {
-  return (
-    <span style={{
-      fontSize: 8,
-      fontWeight: 600,
-      color: "var(--foreground)",
-      opacity: 0.35,
-      letterSpacing: "0.06em",
-      whiteSpace: "nowrap",
-    }}>
-      Step {n}
-    </span>
-  );
+function trunc(s: string, max = 13): string {
+  return s.length > max ? s.slice(0, max - 1) + "…" : s;
 }
 
-// ─── Custom Nodes ─────────────────────────────────────────────────────────────
+// ─── Layout constants ─────────────────────────────────────────────────────────
 
-function StepNode({ data }: { data: StepNodeData }) {
-  const color = STEP_STATUS_COLOR[data.status] ?? STEP_STATUS_COLOR.idle;
-  const pulse = data.status === "running";
-  const init  = initials(data.step.name);
-  // agentRole displayed as the type label (e.g. "PRIMARY", "SCHEDULE", "REPORT")
-  const roleLabel = data.step.agentRole
-    ? data.step.agentRole.toUpperCase()
-    : null;
+const STEP_SIZE          = 68;
+const STEP_SPACING       = 160;   // wider to accommodate skill/tool rows
+const AGENT_SIZE         = 60;
+const AGENT_GAP          = 20;    // gap between consecutive agents
+const AGENT_STEP_GAP     = 60;    // gap between last agent and first step
+
+// ─── Skill / Tool expandable dots ────────────────────────────────────────────
+
+const DOT_SIZE      = 10;  // collapsed dot diameter
+const DOT_EXP_SIZE  = 36;  // expanded circle diameter
+
+interface DotItem { id: string; name: string }
+
+function SkillToolDots({
+  items, color, icon, expanded, onToggle,
+}: {
+  items: DotItem[];
+  color: string;
+  icon: string;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  if (items.length === 0) return null;
 
   return (
-    <div style={{ position: "relative" }}>
-      <Handle type="target" position={Position.Left}
-        style={{ background: color, width: 7, height: 7, border: "none", left: -3 }} />
-      <Handle type="source" position={Position.Right}
-        style={{ background: color, width: 7, height: 7, border: "none", right: -3 }} />
-
-      <CircleNode
-        size={STEP_SIZE}
-        color={color}
-        pulse={pulse}
-        onClick={() => data.onInspect(data.step)}
-        name={data.step.name}
-        aboveLines={
-          <>
-            <StepNumLabel n={data.index + 1} />
-            {roleLabel && <TypeLabel text={roleLabel} color={color} />}
-          </>
-        }
-      >
-        <span style={{
-          fontSize: roleLabel ? 18 : 22,
-          fontWeight: 800,
-          color,
-          lineHeight: 1,
-          opacity: 0.9,
-        }}>
-          {init}
-        </span>
-      </CircleNode>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: expanded ? 6 : 4,
+        flexWrap: "wrap",
+        maxWidth: STEP_SIZE + 40,
+        cursor: "pointer",
+      }}
+      onClick={(e) => { e.stopPropagation(); onToggle(); }}
+      title={expanded ? "Collapse" : items.map((i) => i.name).join(", ")}
+    >
+      {items.map((item) => (
+        <div key={item.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+          {/* Circle */}
+          <div style={{
+            width:        expanded ? DOT_EXP_SIZE : DOT_SIZE,
+            height:       expanded ? DOT_EXP_SIZE : DOT_SIZE,
+            borderRadius: "50%",
+            background:   expanded
+              ? `rgba(${hexToRgb(color)},0.14)`
+              : color,
+            border:       expanded ? `1.5px solid ${color}` : "none",
+            display:      "flex",
+            alignItems:   "center",
+            justifyContent: "center",
+            transition:   "all 0.18s ease",
+            flexShrink:   0,
+          }}>
+            {expanded && (
+              <span style={{ fontSize: 14, lineHeight: 1 }}>{icon}</span>
+            )}
+          </div>
+          {/* Name label (only when expanded) */}
+          {expanded && (
+            <span style={{
+              fontSize: 8,
+              color,
+              fontWeight: 600,
+              textAlign: "center",
+              maxWidth: DOT_EXP_SIZE + 16,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}>
+              {trunc(item.name, 10)}
+            </span>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
+
+// ─── Step Node ────────────────────────────────────────────────────────────────
+
+function StepNode({ data }: { data: StepNodeData }) {
+  const [skillsExpanded, setSkillsExpanded] = useState(false);
+  const [toolsExpanded,  setToolsExpanded]  = useState(false);
+
+  const color  = STATUS_COLOR[data.status] ?? STATUS_COLOR.idle;
+  const pulse  = data.status === "running";
+  const skills = data.step.skills ?? [];
+  const tools  = data.step.tools  ?? [];
+  const init   = initials(data.step.name);
+  const role   = data.step.agentRole?.toUpperCase() ?? null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      {/* Labels above */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, marginBottom: 4, minHeight: 20 }}>
+        <span style={{ fontSize: 8, color: "var(--foreground)", opacity: 0.35, fontWeight: 600, letterSpacing: "0.06em" }}>
+          Step {data.index + 1}
+        </span>
+        {role && (
+          <span style={{ fontSize: 8, color, opacity: 0.8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+            {role}
+          </span>
+        )}
+      </div>
+
+      {/* Skill dots — above circle */}
+      {skills.length > 0 && (
+        <div style={{ marginBottom: 5 }}>
+          <SkillToolDots
+            items={skills}
+            color={SKILL_COLOR}
+            icon="⚡"
+            expanded={skillsExpanded}
+            onToggle={() => setSkillsExpanded((v) => !v)}
+          />
+        </div>
+      )}
+
+      {/* Main circle */}
+      <div style={{ position: "relative" }}>
+        <Handle type="target" position={Position.Left}
+          style={{ background: color, width: 7, height: 7, border: "none", left: -3 }} />
+        <Handle type="source" position={Position.Right}
+          style={{ background: color, width: 7, height: 7, border: "none", right: -3 }} />
+
+        <div
+          onClick={() => data.onInspect(data.step)}
+          style={{
+            width:        STEP_SIZE,
+            height:       STEP_SIZE,
+            borderRadius: "50%",
+            border:       `2px solid ${color}`,
+            background:   `rgba(${hexToRgb(color)},0.11)`,
+            boxShadow:    pulse
+              ? `0 0 0 4px ${color}30, 0 0 18px ${color}28`
+              : `0 0 0 3px ${color}14, 0 2px 8px rgba(0,0,0,0.2)`,
+            display:      "flex",
+            alignItems:   "center",
+            justifyContent: "center",
+            cursor:       "pointer",
+            position:     "relative",
+            transition:   "box-shadow 0.2s",
+            flexShrink:   0,
+          }}
+        >
+          {pulse && (
+            <span style={{
+              position: "absolute", inset: -5, borderRadius: "50%",
+              border: `2px solid ${color}`, opacity: 0.45,
+              animation: "flowPulse 1.4s ease-in-out infinite",
+              pointerEvents: "none",
+            }} />
+          )}
+          <span style={{ fontSize: 18, fontWeight: 800, color, lineHeight: 1, opacity: 0.9 }}>
+            {init}
+          </span>
+        </div>
+      </div>
+
+      {/* Tool dots — below circle */}
+      {tools.length > 0 && (
+        <div style={{ marginTop: 5 }}>
+          <SkillToolDots
+            items={tools}
+            color={TOOL_COLOR}
+            icon="⚙"
+            expanded={toolsExpanded}
+            onToggle={() => setToolsExpanded((v) => !v)}
+          />
+        </div>
+      )}
+
+      {/* Name below */}
+      <div style={{
+        marginTop: 6,
+        fontSize: 9, fontWeight: 600,
+        color: "var(--foreground)", opacity: 0.75,
+        textAlign: "center",
+        maxWidth: STEP_SIZE + 28,
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>
+        {trunc(data.step.name, 16)}
+      </div>
+    </div>
+  );
+}
+
+// ─── Agent Node ───────────────────────────────────────────────────────────────
 
 function AgentNode({ data }: { data: AgentNodeData }) {
   const color = data.linked ? "#3b82f6" : "#64748b";
 
   return (
-    <div style={{ position: "relative" }}>
-      <Handle type="source" position={Position.Bottom}
-        style={{ background: color, width: 7, height: 7, border: "none", bottom: -3 }} />
-
-      <CircleNode
-        size={AGENT_SIZE}
-        color={color}
-        borderStyle={data.linked ? "solid" : "dashed"}
-        name={data.label}
-        aboveLines={
-          <TypeLabel text="AGENT" color={color} />
-        }
-      >
-        <span style={{
-          fontSize: 22,
-          fontWeight: 800,
-          color,
-          lineHeight: 1,
-          opacity: 0.9,
-        }}>
-          {data.label.charAt(0).toUpperCase()}
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      {/* "AGENT" label above */}
+      <div style={{ marginBottom: 4, minHeight: 20, display: "flex", alignItems: "flex-end" }}>
+        <span style={{ fontSize: 8, color, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", opacity: 0.8 }}>
+          AGENT
         </span>
-      </CircleNode>
-    </div>
-  );
-}
+      </div>
 
-function SkillNode({ data }: { data: SkillNodeData }) {
-  const color = "#8b5cf6";
-  return (
-    <div style={{ position: "relative" }}>
-      <Handle type="target" position={Position.Top}
-        style={{ background: color, width: 6, height: 6, border: "none", top: -3 }} />
+      {/* Circle */}
+      <div style={{ position: "relative" }}>
+        <Handle type="source" position={Position.Right}
+          style={{ background: color, width: 7, height: 7, border: "none", right: -3 }} />
 
-      <CircleNode
-        size={SKILL_SIZE}
-        color={color}
-        name={data.label}
-        aboveLines={<TypeLabel text="SKILL" color={color} />}
-      >
-        <span style={{ fontSize: 16, lineHeight: 1, opacity: 0.85 }}>⚡</span>
-      </CircleNode>
-    </div>
-  );
-}
+        <div style={{
+          width:        AGENT_SIZE,
+          height:       AGENT_SIZE,
+          borderRadius: "50%",
+          border:       `2px solid ${color}`,
+          borderStyle:  data.linked ? "solid" : "dashed",
+          background:   `rgba(${hexToRgb(color)},0.11)`,
+          boxShadow:    data.linked
+            ? `0 0 0 3px ${color}18, 0 2px 10px ${color}28`
+            : "0 1px 6px rgba(0,0,0,0.18)",
+          display:      "flex",
+          alignItems:   "center",
+          justifyContent: "center",
+          cursor:       "default",
+          flexShrink:   0,
+        }}>
+          <span style={{ fontSize: 20, fontWeight: 800, color, lineHeight: 1, opacity: 0.9 }}>
+            {data.label.charAt(0).toUpperCase()}
+          </span>
+        </div>
+      </div>
 
-function ToolNode({ data }: { data: ToolNodeData }) {
-  const color = "#f59e0b";
-  return (
-    <div style={{ position: "relative" }}>
-      <Handle type="target" position={Position.Top}
-        style={{ background: color, width: 6, height: 6, border: "none", top: -3 }} />
-
-      <CircleNode
-        size={SKILL_SIZE}
-        color={color}
-        name={data.label}
-        aboveLines={<TypeLabel text="TOOL" color={color} />}
-      >
-        <span style={{ fontSize: 15, lineHeight: 1, opacity: 0.85 }}>⚙</span>
-      </CircleNode>
+      {/* Name below */}
+      <div style={{
+        marginTop: 6,
+        fontSize: 9, fontWeight: 600,
+        color: "var(--foreground)", opacity: 0.75,
+        textAlign: "center",
+        maxWidth: AGENT_SIZE + 28,
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>
+        {trunc(data.label, 14)}
+      </div>
     </div>
   );
 }
@@ -387,8 +350,6 @@ function ToolNode({ data }: { data: ToolNodeData }) {
 const NODE_TYPES: NodeTypes = {
   stepNode:  StepNode  as unknown as NodeTypes[string],
   agentNode: AgentNode as unknown as NodeTypes[string],
-  skillNode: SkillNode as unknown as NodeTypes[string],
-  toolNode:  ToolNode  as unknown as NodeTypes[string],
 };
 
 // ─── Build nodes + edges ──────────────────────────────────────────────────────
@@ -402,21 +363,46 @@ function buildNodesEdges(
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
-  // ── Step nodes ─────────────────────────────────────────────────────────────
-  steps.forEach((step, i) => {
-    const x      = i * STEP_SPACING;
-    const y      = 0;
-    const status: StepStatus = (statuses[step.id] as StepStatus) ?? "idle";
+  // ── Agent nodes — same row, LEFT of first step ─────────────────────────────
+  // Last agent is closest to step 0, at x = -AGENT_STEP_GAP - AGENT_SIZE
+  const firstStepId = steps[0]?.id;
+  agents.forEach((agent, i) => {
+    const agentId = `agent-${agent.id}`;
+    const x = -(agents.length - i) * (AGENT_SIZE + AGENT_GAP) - AGENT_STEP_GAP;
+    nodes.push({
+      id: agentId,
+      type: "agentNode",
+      position: { x, y: 0 },
+      data: { label: agent.label, role: agent.role, linked: agent.linked } satisfies AgentNodeData,
+    });
 
+    // Edge to first step (or to next agent if chained)
+    const target = i === agents.length - 1 ? firstStepId : `agent-${agents[i + 1]?.id}`;
+    if (target) {
+      edges.push({
+        id: `agent-edge-${agentId}`,
+        source: agentId,
+        target,
+        style: {
+          stroke: agent.linked ? "#3b82f6" : "#475569",
+          strokeWidth: 1.5,
+          strokeDasharray: agent.linked ? undefined : "4 3",
+        },
+      });
+    }
+  });
+
+  // ── Step nodes — left to right ─────────────────────────────────────────────
+  steps.forEach((step, i) => {
+    const status: StepStatus = (statuses[step.id] as StepStatus) ?? "idle";
     nodes.push({
       id: step.id,
       type: "stepNode",
-      position: { x, y },
+      position: { x: i * STEP_SPACING, y: 0 },
       data: { step, status, index: i, onInspect: onStepInspect } satisfies StepNodeData,
     });
 
     if (i > 0) {
-      const prevColor = STEP_STATUS_COLOR[(statuses[steps[i - 1].id] as StepStatus) ?? "idle"];
       edges.push({
         id: `step-edge-${i}`,
         source: steps[i - 1].id,
@@ -425,123 +411,47 @@ function buildNodesEdges(
         animated: status === "running",
       });
     }
-
-    // ── Skill sub-nodes (satellite below this step) ────────────────────────
-    const skills = step.skills ?? [];
-    skills.forEach((skill, si) => {
-      const skillId = `skill-${skill.id}-${step.id}`;
-      const totalW  = skills.length * SKILL_SIZE + (skills.length - 1) * 12;
-      const startX  = x + STEP_SIZE / 2 - totalW / 2 + si * (SKILL_SIZE + 12);
-      nodes.push({
-        id: skillId,
-        type: "skillNode",
-        position: { x: startX, y: SKILL_OFFSET_Y },
-        data: { label: skill.name, parentStepId: step.id } satisfies SkillNodeData,
-      });
-      edges.push({
-        id: `skill-edge-${skillId}`,
-        source: step.id,
-        target: skillId,
-        style: { stroke: "rgba(139,92,246,0.3)", strokeWidth: 1, strokeDasharray: "3 3" },
-      });
-    });
-
-    // ── Tool sub-nodes (satellite below skills) ────────────────────────────
-    const tools = step.tools ?? [];
-    tools.forEach((tool, ti) => {
-      const toolId  = `tool-${tool.id}-${step.id}`;
-      const totalW  = tools.length * SKILL_SIZE + (tools.length - 1) * 12;
-      const skillsH = (step.skills?.length ?? 0) > 0 ? SKILL_SIZE + 60 : 0;
-      const startX  = x + STEP_SIZE / 2 - totalW / 2 + ti * (SKILL_SIZE + 12);
-      nodes.push({
-        id: toolId,
-        type: "toolNode",
-        position: { x: startX, y: SKILL_OFFSET_Y + skillsH },
-        data: { label: tool.name, parentStepId: step.id } satisfies ToolNodeData,
-      });
-      edges.push({
-        id: `tool-edge-${toolId}`,
-        source: step.id,
-        target: toolId,
-        style: { stroke: "rgba(245,158,11,0.3)", strokeWidth: 1, strokeDasharray: "3 3" },
-      });
-    });
-  });
-
-  // ── Agent nodes ────────────────────────────────────────────────────────────
-  const firstStepId = steps[0]?.id;
-  agents.forEach((agent, i) => {
-    const agentId = `agent-${agent.id}`;
-    const x       = AGENT_OFFSET_X + i * (AGENT_SIZE + AGENT_GAP);
-    const y       = AGENT_OFFSET_Y;
-
-    nodes.push({
-      id: agentId,
-      type: "agentNode",
-      position: { x, y },
-      data: { label: agent.label, role: agent.role, linked: agent.linked } satisfies AgentNodeData,
-    });
-
-    if (firstStepId) {
-      edges.push({
-        id: `agent-edge-${agentId}`,
-        source: agentId,
-        target: firstStepId,
-        style: {
-          stroke: agent.linked ? "#3b82f6" : "#475569",
-          strokeWidth: 1,
-          strokeDasharray: agent.linked ? undefined : "4 3",
-        },
-      });
-    }
   });
 
   return { nodes, edges };
 }
 
-// ─── Reset layout helper ──────────────────────────────────────────────────────
+// ─── Reset layout ─────────────────────────────────────────────────────────────
 
 function computeResetPositions(nodes: Node[]): Node[] {
   const stepNodes  = nodes.filter((n) => n.type === "stepNode");
   const agentNodes = nodes.filter((n) => n.type === "agentNode");
-  const skillNodes = nodes.filter((n) => n.type === "skillNode");
-  const toolNodes  = nodes.filter((n) => n.type === "toolNode");
 
-  // Re-derive step index from current ordering
   const updatedSteps = stepNodes.map((n, i) => ({
-    ...n,
-    position: { x: i * STEP_SPACING, y: 0 },
+    ...n, position: { x: i * STEP_SPACING, y: 0 },
   }));
-
   const updatedAgents = agentNodes.map((n, i) => ({
     ...n,
-    position: { x: AGENT_OFFSET_X + i * (AGENT_SIZE + AGENT_GAP), y: AGENT_OFFSET_Y },
+    position: {
+      x: -(agentNodes.length - i) * (AGENT_SIZE + AGENT_GAP) - AGENT_STEP_GAP,
+      y: 0,
+    },
   }));
-
-  // Keep skill/tool positions relative to their parent steps
-  // (approximate — group by parentStepId order)
-  const parentOrder: Record<string, number> = {};
-  updatedSteps.forEach((n, i) => { parentOrder[n.id] = i; });
-
-  const updatedSkills = skillNodes.map((n) => {
-    const data = n.data as SkillNodeData;
-    const si   = parentOrder[data.parentStepId] ?? 0;
-    return { ...n, position: { x: si * STEP_SPACING, y: SKILL_OFFSET_Y } };
-  });
-
-  const updatedTools = toolNodes.map((n) => {
-    const data = n.data as ToolNodeData;
-    const si   = parentOrder[data.parentStepId] ?? 0;
-    return { ...n, position: { x: si * STEP_SPACING, y: SKILL_OFFSET_Y + SKILL_SIZE + 60 } };
-  });
-
-  return [...updatedSteps, ...updatedAgents, ...updatedSkills, ...updatedTools];
+  return [...updatedAgents, ...updatedSteps];
 }
+
+// ─── Toolbar button style ─────────────────────────────────────────────────────
+
+const BTN_STYLE: React.CSSProperties = {
+  display: "flex", alignItems: "center", justifyContent: "center",
+  width: 26, height: 26,
+  background: "var(--card)",
+  border: "1px solid var(--border)",
+  borderRadius: 5,
+  color: "var(--muted-foreground)",
+  cursor: "pointer",
+};
 
 // ─── Inner canvas ─────────────────────────────────────────────────────────────
 
 function FlowCanvasInner({ steps, agents, stepStatuses = {}, onStepInspect }: FlowCanvasProps) {
   const { fitView } = useReactFlow();
+  const [showMinimap, setShowMinimap] = useState(false);
 
   const noop    = useCallback((_: FlowStep) => {}, []);
   const inspect = onStepInspect ?? noop;
@@ -555,38 +465,32 @@ function FlowCanvasInner({ steps, agents, stepStatuses = {}, onStepInspect }: Fl
   const [nodes, setNodes, onNodesChange] = useNodesState(initNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initEdges);
 
-  // Rebuild when step/agent identity changes (new workflow loaded)
   useEffect(() => {
     const { nodes: n, edges: e } = buildNodesEdges(steps, agents, stepStatuses, inspect);
-    setNodes(n);
-    setEdges(e);
-    setTimeout(() => fitView({ padding: 0.25, duration: 400 }), 50);
+    setNodes(n); setEdges(e);
+    setTimeout(() => fitView({ padding: 0.3, duration: 400 }), 50);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [steps.map((s) => s.id).join(","), agents.map((a) => a.id).join(",")]);
 
-  // Update step status without resetting positions
+  // Status color updates without position reset
   useEffect(() => {
-    setNodes((prev) =>
-      prev.map((node) => {
-        if (node.type !== "stepNode") return node;
-        const status: StepStatus = (stepStatuses[node.id] as StepStatus) ?? "idle";
-        if ((node.data as StepNodeData).status === status) return node;
-        return { ...node, data: { ...node.data, status } };
-      }),
-    );
-    setEdges((prev) =>
-      prev.map((edge) => {
-        if (!edge.target || edge.target.startsWith("agent-")) return edge;
-        const targetStatus: StepStatus = (stepStatuses[edge.target] as StepStatus) ?? "idle";
-        return { ...edge, animated: targetStatus === "running" };
-      }),
-    );
+    setNodes((prev) => prev.map((node) => {
+      if (node.type !== "stepNode") return node;
+      const status: StepStatus = (stepStatuses[node.id] as StepStatus) ?? "idle";
+      if ((node.data as StepNodeData).status === status) return node;
+      return { ...node, data: { ...node.data, status } };
+    }));
+    setEdges((prev) => prev.map((edge) => {
+      if (!edge.target || edge.target.startsWith("agent-")) return edge;
+      const s: StepStatus = (stepStatuses[edge.target] as StepStatus) ?? "idle";
+      return { ...edge, animated: s === "running" };
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(stepStatuses)]);
 
-  const handleResetLayout = useCallback(() => {
+  const handleReset = useCallback(() => {
     setNodes((prev) => computeResetPositions(prev));
-    setTimeout(() => fitView({ padding: 0.25, duration: 400 }), 50);
+    setTimeout(() => fitView({ padding: 0.3, duration: 400 }), 50);
   }, [setNodes, fitView]);
 
   return (
@@ -596,74 +500,54 @@ function FlowCanvasInner({ steps, agents, stepStatuses = {}, onStepInspect }: Fl
           0%, 100% { opacity: 0.3; transform: scale(1); }
           50%       { opacity: 0.65; transform: scale(1.06); }
         }
-        .react-flow__node         { cursor: default; }
-        .react-flow__node:hover   { z-index: 10; }
-        .react-flow__controls     { bottom: 16px; left: 16px; }
-        .react-flow__minimap      { bottom: 16px; right: 16px; border-radius: 8px; overflow: hidden; }
-        .react-flow__background   { opacity: 0.4; }
-        .grace-reset-btn {
-          display: flex; align-items: center; justify-content: center;
-          width: 26px; height: 26px;
-          background: var(--card);
-          border: 1px solid var(--border);
-          border-radius: 5px;
-          color: var(--muted-foreground);
-          cursor: pointer;
-          transition: color 0.15s, background 0.15s;
-        }
-        .grace-reset-btn:hover {
-          color: var(--foreground);
-          background: var(--accent);
-        }
+        .react-flow__node        { cursor: default; }
+        .react-flow__node:hover  { z-index: 10; }
+        .react-flow__controls    { bottom: 16px; left: 16px; }
+        .react-flow__minimap     { bottom: 50px; right: 16px; border-radius: 8px; overflow: hidden; }
+        .react-flow__background  { opacity: 0.4; }
+        .grace-flow-btn:hover { color: var(--foreground) !important; background: var(--accent) !important; }
       `}</style>
 
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
+        nodes={nodes} edges={edges}
+        onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
         nodeTypes={NODE_TYPES}
-        fitView
-        fitViewOptions={{ padding: 0.3 }}
-        minZoom={0.15}
-        maxZoom={2}
+        fitView fitViewOptions={{ padding: 0.3 }}
+        minZoom={0.15} maxZoom={2.5}
         proOptions={{ hideAttribution: true }}
         style={{ background: "transparent" }}
       >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={20}
-          size={1}
-          color="var(--border)"
-        />
-        <Controls
-          showInteractive={false}
-          style={{
-            background: "var(--card)",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
-          }}
-        />
-        <MiniMap
-          nodeColor={(node) => {
-            if (node.type === "agentNode") return "#3b82f6";
-            if (node.type === "skillNode") return "#8b5cf6";
-            if (node.type === "toolNode")  return "#f59e0b";
-            const d = node.data as StepNodeData;
-            return STEP_STATUS_COLOR[d?.status ?? "idle"] ?? "#475569";
-          }}
-          maskColor="rgba(0,0,0,0.6)"
-          style={{ background: "var(--card)", border: "1px solid var(--border)" }}
-        />
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="var(--border)" />
+        <Controls showInteractive={false} style={{
+          background: "var(--card)", border: "1px solid var(--border)",
+          borderRadius: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+        }} />
 
-        {/* Reset-to-row button — top-right */}
-        <Panel position="top-right" style={{ top: 8, right: 8, margin: 0 }}>
-          <button
-            type="button"
-            className="grace-reset-btn"
+        {showMinimap && (
+          <MiniMap
+            nodeColor={(node) => {
+              if (node.type === "agentNode") return "#3b82f6";
+              const d = node.data as StepNodeData;
+              return STATUS_COLOR[d?.status ?? "idle"] ?? "#475569";
+            }}
+            maskColor="rgba(0,0,0,0.6)"
+            style={{ background: "var(--card)", border: "1px solid var(--border)" }}
+          />
+        )}
+
+        {/* Top-right buttons: reset + minimap toggle */}
+        <Panel position="top-right" style={{ top: 8, right: 8, margin: 0, display: "flex", gap: 6 }}>
+          <button type="button" className="grace-flow-btn"
+            style={{ ...BTN_STYLE, color: showMinimap ? "var(--foreground)" : undefined }}
+            title={showMinimap ? "Hide minimap" : "Show minimap"}
+            onClick={() => setShowMinimap((v) => !v)}
+          >
+            <Map size={13} />
+          </button>
+          <button type="button" className="grace-flow-btn"
+            style={BTN_STYLE}
             title="Reset to horizontal row"
-            onClick={handleResetLayout}
+            onClick={handleReset}
           >
             <AlignHorizontalDistributeCenter size={14} />
           </button>
