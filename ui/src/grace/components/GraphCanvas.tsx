@@ -93,7 +93,7 @@ function buildGraph(
       x: cx + agentR * Math.cos(angle) + (Math.random() - 0.5) * 8,
       y: cy + agentR * Math.sin(angle) + (Math.random() - 0.5) * 8,
       vx: 0, vy: 0,
-      radius: 18,
+      radius: 24,
     });
   });
 
@@ -306,28 +306,48 @@ function renderFrame(
     }
 
     if (node.type === "agent") {
-      ctx.save();
-      ctx.translate(node.x, node.y);
-      ctx.rotate(Math.PI / 4);
+      const isLinked = node.linked !== false;
+
+      // ── Circle ───────────────────────────────────────────────────
       ctx.beginPath();
-      const s = r * 0.8;
-      ctx.rect(-s, -s, s * 2, s * 2);
-      ctx.fillStyle = color + (Math.round(alpha * 0x1a)).toString(16).padStart(2, "0");
+      ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = color + (Math.round(alpha * 0x1c)).toString(16).padStart(2, "0");
       ctx.fill();
-      if (node.linked === false) {
-        ctx.setLineDash([3, 3]);
-        ctx.strokeStyle = `rgba(150,130,200,${alpha * 0.5})`;
-      } else {
-        ctx.setLineDash([]);
-        ctx.strokeStyle = color + (Math.round(alpha * 0xcc)).toString(16).padStart(2, "0");
-      }
-      ctx.lineWidth = 1.5;
+      if (!isLinked) ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = color + (Math.round(alpha * 0xcc)).toString(16).padStart(2, "0");
+      ctx.lineWidth = 2;
       ctx.stroke();
       ctx.setLineDash([]);
-      ctx.restore();
 
+      // ── Bot face ─────────────────────────────────────────────────
+      const eyeR  = Math.max(1.8, r * 0.14);
+      const eyeY  = node.y - r * 0.1;
+      const eyeOff = r * 0.25;
+
+      // Eyes — white circle + coloured pupil
+      for (const ex of [node.x - eyeOff, node.x + eyeOff]) {
+        ctx.beginPath();
+        ctx.arc(ex, eyeY, eyeR, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,255,255,${alpha * 0.9})`;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(ex, eyeY, eyeR * 0.45, 0, Math.PI * 2);
+        ctx.fillStyle = color + (Math.round(alpha * 0xcc)).toString(16).padStart(2, "0");
+        ctx.fill();
+      }
+
+      // Mouth — rounded horizontal bar
+      const mw = r * 0.50;
+      const mh = Math.max(2, r * 0.12);
+      const mx = node.x - mw / 2;
+      const my = node.y + r * 0.25;
+      ctx.beginPath();
+      ctx.roundRect(mx, my, mw, mh, mh / 2);
+      ctx.fillStyle = `rgba(255,255,255,${alpha * 0.65})`;
+      ctx.fill();
+
+      // ── Label above ──────────────────────────────────────────────
       const agentLabel = node.label.length > 14 ? node.label.slice(0, 12) + "…" : node.label;
-      const isLinked = node.linked !== false;
       ctx.fillStyle = isLinked
         ? `rgba(200,185,255,${alpha * 0.9})`
         : `rgba(140,130,160,${alpha * 0.65})`;
@@ -335,11 +355,9 @@ function renderFrame(
       ctx.textAlign = "center";
       ctx.textBaseline = "bottom";
       ctx.fillText(agentLabel, node.x, node.y - r - 4);
-
       if (!isLinked) {
         ctx.fillStyle = `rgba(120,110,140,${alpha * 0.5})`;
         ctx.font = `8px sans-serif`;
-        ctx.textBaseline = "bottom";
         ctx.fillText("unlinked", node.x, node.y - r - 14);
       }
 
