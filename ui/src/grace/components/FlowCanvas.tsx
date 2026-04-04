@@ -1,24 +1,23 @@
 /**
- * FlowCanvas — Phase 9
- *
- * Replaces the custom HTML5 canvas (GraphCanvas.tsx) with React Flow.
+ * FlowCanvas — Phase 9+
  *
  * Features:
  *   - Pan + drag canvas natively
  *   - Mouse wheel / trackpad zoom
  *   - fitView on load
  *   - MiniMap, Controls, Background (dots)
- *   - Custom node types: StepNode, AgentNode, SkillNode, ToolNode
- *   - Agent nodes connect to first step
+ *   - Custom node types: StepNode, AgentNode (circle), SkillNode, ToolNode
+ *   - Agent nodes are circles (avatar-ready)
  *   - Step status → node color + pulse animation
  *   - Click step node → onStepInspect()
+ *   - "Reset to row" toolbar button — snaps all nodes back to an even
+ *     horizontal row and fits the view; does not prevent free dragging.
  *
- * Color system (matches spec):
+ * Color system:
  *   agent:    #3b82f6 (blue)
  *   step:     #8b5cf6 (violet, default) / status overrides
  *   skill:    #8b5cf6 (violet)
  *   tool:     #f59e0b (amber)
- *   artifact: #22c55e (green)
  *
  * Step status → node color:
  *   idle:      #475569 (slate)
@@ -36,6 +35,7 @@ import ReactFlow, {
   Background,
   Controls,
   MiniMap,
+  Panel,
   BackgroundVariant,
   type Node,
   type Edge,
@@ -46,6 +46,7 @@ import ReactFlow, {
   ReactFlowProvider,
 } from "reactflow";
 import "reactflow/dist/style.css";
+import { AlignHorizontalDistributeCenter } from "lucide-react";
 import type { FlowStep } from "./FlowStepCard";
 import type { StudioAgent } from "./GraphCanvas";
 import type { StepStatus } from "../providers/providerTypes";
@@ -63,7 +64,6 @@ interface FlowCanvasProps {
   onStepInspect?: (step: FlowStep) => void;
 }
 
-// Custom node data shapes
 interface StepNodeData {
   step: FlowStep;
   status: StepStatus;
@@ -108,12 +108,22 @@ const STEP_STATUS_BG: Record<StepStatus, string> = {
   failed:       "rgba(239,68,68,0.10)",
 };
 
+// ─── Layout constants ─────────────────────────────────────────────────────────
+
+const STEP_W          = 220;
+const STEP_H          = 90;   // approximate, used for agent offset
+const STEP_GAP        = 60;
+const AGENT_SIZE      = 64;   // diameter of the circle node
+const AGENT_GAP       = 24;
+const AGENT_OFFSET_X  = 0;
+const AGENT_OFFSET_Y  = -(AGENT_SIZE + 60); // above the step row
+
 // ─── Custom Nodes ─────────────────────────────────────────────────────────────
 
 function StepNode({ data }: { data: StepNodeData }) {
-  const color  = STEP_STATUS_COLOR[data.status] ?? STEP_STATUS_COLOR.idle;
-  const bg     = STEP_STATUS_BG[data.status]    ?? STEP_STATUS_BG.idle;
-  const pulse  = data.status === "running";
+  const color = STEP_STATUS_COLOR[data.status] ?? STEP_STATUS_COLOR.idle;
+  const bg    = STEP_STATUS_BG[data.status]    ?? STEP_STATUS_BG.idle;
+  const pulse = data.status === "running";
   const skills = data.step.skills?.slice(0, 3) ?? [];
   const tools  = data.step.tools?.slice(0, 3)  ?? [];
 
@@ -192,7 +202,7 @@ function StepNode({ data }: { data: StepNodeData }) {
 
       <div style={{
         marginTop: 5, marginLeft: 13, fontSize: 9,
-        color: color, opacity: 0.7, textTransform: "uppercase", letterSpacing: "0.05em",
+        color, opacity: 0.7, textTransform: "uppercase", letterSpacing: "0.05em",
       }}>
         {data.status}
       </div>
@@ -200,41 +210,87 @@ function StepNode({ data }: { data: StepNodeData }) {
   );
 }
 
+/**
+ * AgentNode — circle shape, ready for avatar image in future.
+ * Currently shows the first letter of the agent name as a monogram.
+ * The agent name label floats below the circle.
+ */
 function AgentNode({ data }: { data: AgentNodeData }) {
   const color = data.linked ? "#3b82f6" : "#64748b";
+  const SIZE  = AGENT_SIZE;
 
   return (
-    <div style={{
-      border: `1.5px solid ${color}`,
-      borderStyle: data.linked ? "solid" : "dashed",
-      background: `rgba(${data.linked ? "59,130,246" : "100,116,139"},0.08)`,
-      borderRadius: 10,
-      padding: "8px 14px",
-      minWidth: 130,
-      cursor: "default",
-      boxShadow: "0 1px 6px rgba(0,0,0,0.18)",
-    }}>
-      <Handle type="source" position={Position.Right} style={{ background: color, width: 8, height: 8, border: "none" }} />
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <div style={{
-          width: 22, height: 22, borderRadius: "50%",
-          background: `rgba(${data.linked ? "59,130,246" : "100,116,139"},0.15)`,
-          border: `1px solid ${color}40`,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          flexShrink: 0,
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      {/* Circle */}
+      <div style={{
+        width:  SIZE,
+        height: SIZE,
+        borderRadius: "50%",
+        border: `2px solid ${color}`,
+        borderStyle: data.linked ? "solid" : "dashed",
+        background: `rgba(${data.linked ? "59,130,246" : "100,116,139"},0.12)`,
+        boxShadow: data.linked
+          ? `0 0 0 4px ${color}18, 0 2px 12px ${color}30`
+          : "0 1px 6px rgba(0,0,0,0.18)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        position: "relative",
+        cursor: "default",
+        flexShrink: 0,
+        transition: "box-shadow 0.2s",
+      }}>
+        {/* Source handle on the right edge of the circle */}
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          style={{ background: color, width: 8, height: 8, border: "none" }}
+        />
+
+        {/* Monogram — will be replaced by avatar img in the future */}
+        <span style={{
+          fontSize: 20,
+          fontWeight: 700,
+          color,
+          lineHeight: 1,
+          userSelect: "none",
         }}>
-          <span style={{ fontSize: 10, fontWeight: 700, color }}>
-            {data.label.charAt(0).toUpperCase()}
-          </span>
-        </div>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 100 }}>
-            {data.label}
-          </div>
-          <div style={{ fontSize: 9, color, opacity: 0.7, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            {data.role}
-          </div>
-        </div>
+          {data.label.charAt(0).toUpperCase()}
+        </span>
+
+        {/* Role tag inside circle */}
+        <span style={{
+          fontSize: 7,
+          color,
+          opacity: 0.75,
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+          marginTop: 3,
+          textAlign: "center",
+          maxWidth: SIZE - 12,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}>
+          {data.role}
+        </span>
+      </div>
+
+      {/* Agent name label below the circle */}
+      <div style={{
+        marginTop: 6,
+        fontSize: 9,
+        fontWeight: 600,
+        color: "var(--foreground)",
+        opacity: 0.75,
+        whiteSpace: "nowrap",
+        textAlign: "center",
+        maxWidth: SIZE + 24,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+      }}>
+        {data.label}
       </div>
     </div>
   );
@@ -275,15 +331,7 @@ const NODE_TYPES: NodeTypes = {
   toolNode:  ToolNode  as unknown as NodeTypes[string],
 };
 
-// ─── Layout ───────────────────────────────────────────────────────────────────
-
-const STEP_W   = 220;
-const STEP_H   = 90;
-const STEP_GAP = 60;
-const AGENT_W  = 150;
-const AGENT_H  = 50;
-const AGENT_OFFSET_X = 20;
-const AGENT_OFFSET_Y = -80;
+// ─── Build nodes + edges ──────────────────────────────────────────────────────
 
 function buildNodesEdges(
   steps: FlowStep[],
@@ -294,7 +342,7 @@ function buildNodesEdges(
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
-  // Step nodes — left to right
+  // ── Step nodes — left to right, centered row ──────────────────────────────
   steps.forEach((step, i) => {
     const x = i * (STEP_W + STEP_GAP);
     const y = 0;
@@ -319,19 +367,23 @@ function buildNodesEdges(
     }
   });
 
-  // Agent nodes — above and to the left of first step
+  // ── Agent nodes — circular, stacked above the step row ───────────────────
   const firstStepId = steps[0]?.id;
+  const totalAgentW = agents.length * AGENT_SIZE + (agents.length - 1) * AGENT_GAP;
+  // Center agents above the first ~third of the step row
+  const agentRowStart = AGENT_OFFSET_X;
+
   agents.forEach((agent, i) => {
     const agentId = `agent-${agent.id}`;
-    const x = AGENT_OFFSET_X + i * (AGENT_W + 20);
-    const y = AGENT_OFFSET_Y - i * 10;
+    const x = agentRowStart + i * (AGENT_SIZE + AGENT_GAP);
+    const y = AGENT_OFFSET_Y;
 
     nodes.push({
       id: agentId,
       type: "agentNode",
       position: { x, y },
       data: { label: agent.label, role: agent.role, linked: agent.linked } satisfies AgentNodeData,
-      style: { width: AGENT_W },
+      // No fixed width — circle is self-sizing
     });
 
     if (firstStepId) {
@@ -339,7 +391,12 @@ function buildNodesEdges(
         id: `agent-edge-${agentId}`,
         source: agentId,
         target: firstStepId,
-        style: { stroke: agent.linked ? "#3b82f6" : "#475569", strokeWidth: 1, strokeDasharray: agent.linked ? undefined : "4 3" },
+        sourceHandle: null,
+        style: {
+          stroke: agent.linked ? "#3b82f6" : "#475569",
+          strokeWidth: 1,
+          strokeDasharray: agent.linked ? undefined : "4 3",
+        },
       });
     }
   });
@@ -347,12 +404,36 @@ function buildNodesEdges(
   return { nodes, edges };
 }
 
-// ─── Inner canvas (needs ReactFlowProvider wrapper) ───────────────────────────
+// ─── Reset layout helper ──────────────────────────────────────────────────────
+
+/**
+ * Returns updated positions for a "reset to horizontal row" layout.
+ * Step nodes get evenly spaced in a row; agent nodes go back above them.
+ */
+function computeResetPositions(nodes: Node[]): Node[] {
+  const stepNodes  = nodes.filter((n) => n.type === "stepNode");
+  const agentNodes = nodes.filter((n) => n.type === "agentNode");
+  const otherNodes = nodes.filter((n) => n.type !== "stepNode" && n.type !== "agentNode");
+
+  const updatedSteps = stepNodes.map((n, i) => ({
+    ...n,
+    position: { x: i * (STEP_W + STEP_GAP), y: 0 },
+  }));
+
+  const updatedAgents = agentNodes.map((n, i) => ({
+    ...n,
+    position: { x: AGENT_OFFSET_X + i * (AGENT_SIZE + AGENT_GAP), y: AGENT_OFFSET_Y },
+  }));
+
+  return [...updatedSteps, ...updatedAgents, ...otherNodes];
+}
+
+// ─── Inner canvas ─────────────────────────────────────────────────────────────
 
 function FlowCanvasInner({ steps, agents, stepStatuses = {}, onStepInspect }: FlowCanvasProps) {
   const { fitView } = useReactFlow();
 
-  const noop = useCallback((_: FlowStep) => {}, []);
+  const noop    = useCallback((_: FlowStep) => {}, []);
   const inspect = onStepInspect ?? noop;
 
   const { nodes: initNodes, edges: initEdges } = useMemo(
@@ -364,7 +445,7 @@ function FlowCanvasInner({ steps, agents, stepStatuses = {}, onStepInspect }: Fl
   const [nodes, setNodes, onNodesChange] = useNodesState(initNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initEdges);
 
-  // Rebuild nodes when steps change identity (e.g. new workflow loaded)
+  // Rebuild when step/agent identity changes (new workflow loaded)
   useEffect(() => {
     const { nodes: n, edges: e } = buildNodesEdges(steps, agents, stepStatuses, inspect);
     setNodes(n);
@@ -373,7 +454,7 @@ function FlowCanvasInner({ steps, agents, stepStatuses = {}, onStepInspect }: Fl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [steps.map((s) => s.id).join(","), agents.map((a) => a.id).join(",")]);
 
-  // Update step status colors without rebuilding positions
+  // Update step status colors without resetting positions
   useEffect(() => {
     setNodes((prev) =>
       prev.map((node) => {
@@ -383,7 +464,6 @@ function FlowCanvasInner({ steps, agents, stepStatuses = {}, onStepInspect }: Fl
         return { ...node, data: { ...node.data, status } };
       }),
     );
-    // Update edge animation based on running steps
     setEdges((prev) =>
       prev.map((edge) => {
         if (!edge.target || edge.target.startsWith("agent-")) return edge;
@@ -391,21 +471,41 @@ function FlowCanvasInner({ steps, agents, stepStatuses = {}, onStepInspect }: Fl
         return { ...edge, animated: targetStatus === "running" };
       }),
     );
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(stepStatuses)]);
+
+  // ── Reset to row ───────────────────────────────────────────────────────────
+  const handleResetLayout = useCallback(() => {
+    setNodes((prev) => computeResetPositions(prev));
+    setTimeout(() => fitView({ padding: 0.25, duration: 400 }), 50);
+  }, [setNodes, fitView]);
 
   return (
     <>
       <style>{`
         @keyframes flowPulse {
           0%, 100% { opacity: 0.3; transform: scale(1); }
-          50% { opacity: 0.6; transform: scale(1.04); }
+          50%       { opacity: 0.6; transform: scale(1.04); }
         }
-        .react-flow__node { cursor: default; }
-        .react-flow__node:hover { z-index: 10; }
-        .react-flow__controls { bottom: 16px; left: 16px; }
-        .react-flow__minimap { bottom: 16px; right: 16px; border-radius: 8px; overflow: hidden; }
-        .react-flow__background { opacity: 0.4; }
+        .react-flow__node          { cursor: default; }
+        .react-flow__node:hover    { z-index: 10; }
+        .react-flow__controls      { bottom: 16px; left: 16px; }
+        .react-flow__minimap       { bottom: 16px; right: 16px; border-radius: 8px; overflow: hidden; }
+        .react-flow__background    { opacity: 0.4; }
+        .grace-reset-btn {
+          display: flex; align-items: center; justify-content: center;
+          width: 26px; height: 26px;
+          background: var(--card);
+          border: 1px solid var(--border);
+          border-radius: 5px;
+          color: var(--muted-foreground);
+          cursor: pointer;
+          transition: color 0.15s, background 0.15s;
+        }
+        .grace-reset-btn:hover {
+          color: var(--foreground);
+          background: var(--accent);
+        }
       `}</style>
 
       <ReactFlow
@@ -450,12 +550,24 @@ function FlowCanvasInner({ steps, agents, stepStatuses = {}, onStepInspect }: Fl
             border: "1px solid var(--border)",
           }}
         />
+
+        {/* Reset-to-row button — top-right corner */}
+        <Panel position="top-right" style={{ top: 8, right: 8, margin: 0 }}>
+          <button
+            type="button"
+            className="grace-reset-btn"
+            title="Reset to horizontal row"
+            onClick={handleResetLayout}
+          >
+            <AlignHorizontalDistributeCenter size={14} />
+          </button>
+        </Panel>
       </ReactFlow>
     </>
   );
 }
 
-// ─── Public export (wrapped in provider) ──────────────────────────────────────
+// ─── Public export ────────────────────────────────────────────────────────────
 
 export function FlowCanvas(props: FlowCanvasProps) {
   return (
