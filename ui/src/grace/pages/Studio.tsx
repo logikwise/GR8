@@ -28,7 +28,7 @@ import {
   MessageSquare, PenLine, PanelLeft, BarChart3, GitBranch,
   Info, ChevronRight, Tag, Calendar, Hash, Clock, PlayCircle,
   Activity, GripVertical, Square, Send, Plug, WifiOff,
-  CheckCircle2, Loader2, Trash2, AlertTriangle, Paperclip, Link2, ExternalLink,
+  CheckCircle2, Loader2, Trash2, AlertTriangle, Paperclip, Link2, ExternalLink, X,
 } from "lucide-react";
 import { InputsPanel } from "../components/InputsPanel";
 import { OutputCard } from "../components/OutputCard";
@@ -667,11 +667,156 @@ function LandingCanvas() {
   );
 }
 
+// ─── Workflow Info Card ─────────────────────────────────────────────────────────
+
+function WorkflowInfoCard({
+  mode, name, description, steps, blueprint, agents, onClose, onOpenTab,
+}: {
+  mode: StudioMode;
+  name: string;
+  description?: string;
+  steps: FlowStep[];
+  blueprint?: Blueprint | null;
+  agents: StudioAgent[];
+  onClose: () => void;
+  onOpenTab?: (tab: BottomTab) => void;
+}) {
+  const allSkills = [...new Map(
+    steps.flatMap((s) => s.skills ?? []).map((sk) => [sk.id, sk])
+  ).values()];
+  const allTools = [...new Map(
+    steps.flatMap((s) => s.tools ?? []).map((t) => [t.id, t])
+  ).values()];
+
+  const usedAgentIds = [...new Set(steps.map((s) => s.agentId).filter(Boolean))];
+  const usedAgents = usedAgentIds
+    .map((id) => agents.find((a) => a.id === id))
+    .filter(Boolean) as StudioAgent[];
+
+  const categoryLabel = mode === "blueprint" ? "BLUEPRINT" : "WORKFLOW";
+  const version = blueprint?.version;
+
+  const MAX_PILLS = 4;
+
+  function Pill({
+    label, onClick,
+  }: { label: string; onClick?: () => void }) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(
+          "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors leading-tight",
+          onClick
+            ? "border-[var(--grace-accent)]/30 bg-[var(--grace-accent)]/10 text-[var(--grace-accent)] hover:bg-[var(--grace-accent)]/20 cursor-pointer"
+            : "border-border/60 bg-card text-muted-foreground/70 cursor-default"
+        )}
+      >
+        {label}
+      </button>
+    );
+  }
+
+  function Section({
+    label, items, tab,
+  }: { label: string; items: string[]; tab?: BottomTab }) {
+    if (items.length === 0) return null;
+    const shown = items.slice(0, MAX_PILLS);
+    const extra = items.length - shown.length;
+    return (
+      <div className="space-y-1.5">
+        <p className="text-[9px] tracking-[0.15em] uppercase text-muted-foreground/40 font-medium">
+          {label}
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {shown.map((item) => (
+            <Pill key={item} label={item} onClick={tab ? () => onOpenTab?.(tab) : undefined} />
+          ))}
+          {extra > 0 && (
+            <Pill
+              label={`+${extra} more`}
+              onClick={tab ? () => onOpenTab?.(tab) : undefined}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-border/60 bg-card/95 backdrop-blur-md shadow-2xl p-4 w-72">
+      {/* Header row */}
+      <div className="flex items-start justify-between mb-3">
+        <span className="text-[9px] tracking-[0.2em] uppercase text-[var(--grace-accent)] font-semibold">
+          {categoryLabel}
+        </span>
+        <button type="button" onClick={onClose}
+          className="text-muted-foreground/30 hover:text-muted-foreground transition-colors -mt-0.5 -mr-0.5">
+          <X size={13} />
+        </button>
+      </div>
+
+      {/* Name */}
+      <h2 className="text-xl font-bold leading-tight tracking-tight text-foreground mb-1">
+        {name}
+      </h2>
+
+      {/* Description */}
+      {description ? (
+        <p className="text-[11px] text-muted-foreground/70 leading-relaxed mb-4 line-clamp-3">
+          {description}
+        </p>
+      ) : (
+        <div className="mb-4" />
+      )}
+
+      {/* Agent + skill + tool sections */}
+      <div className="space-y-3">
+        <Section
+          label="Agents"
+          items={usedAgents.map((a) => a.name)}
+          tab={undefined}
+        />
+        <Section
+          label="Skills"
+          items={allSkills.map((s) => s.name)}
+          tab="skills"
+        />
+        <Section
+          label="Tools"
+          items={allTools.map((t) => t.name)}
+          tab="tools"
+        />
+      </div>
+
+      {/* Footer row */}
+      <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between">
+        <div className="flex items-center gap-3 text-[10px] text-muted-foreground/50">
+          <span className="flex items-center gap-1">
+            <ListChecks size={9} /> {steps.length} step{steps.length !== 1 ? "s" : ""}
+          </span>
+          {version && (
+            <span className="flex items-center gap-1">
+              <GitBranch size={9} /> v{version}
+            </span>
+          )}
+        </div>
+        <button type="button"
+          onClick={() => onOpenTab?.("steps")}
+          className="flex items-center gap-1 text-[10px] text-[var(--grace-accent)]/70 hover:text-[var(--grace-accent)] transition-colors font-medium">
+          View steps <ChevronRight size={9} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Center Canvas ─────────────────────────────────────────────────────────────
 
 function CenterCanvas({
   mode, blueprint, instance, centerTab, agents,
   selectedStep, onInspect, onInspectorClose, runRecord,
+  onOpenBottomTab,
 }: {
   mode: StudioMode; blueprint?: Blueprint | null; instance?: Instance | null;
   centerTab: CenterTab; agents: StudioAgent[];
@@ -679,8 +824,9 @@ function CenterCanvas({
   onInspect: (step: FlowStep) => void;
   onInspectorClose: () => void;
   runRecord: RunRecord | null;
+  onOpenBottomTab?: (tab: BottomTab) => void;
 }) {
-  const [infoPanelOpen, setInfoPanelOpen] = useState(false);
+  const [infoPanelOpen, setInfoPanelOpen] = useState(true);
 
   if (mode === "landing") return <LandingCanvas />;
 
@@ -742,40 +888,21 @@ function CenterCanvas({
         {(centerTab === "graph" || centerTab === "flow") && infoName && (
           <div className="absolute top-3 left-3 z-20">
             {infoPanelOpen ? (
-              <div className="rounded-lg border border-border bg-card/90 backdrop-blur shadow-lg p-3 w-52">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    {mode === "blueprint"
-                      ? <PenLine size={11} className="text-[var(--grace-accent)]" />
-                      : <Cpu size={11} className="text-[var(--grace-accent)]" />}
-                    <span className="text-xs font-semibold truncate">{infoName}</span>
-                  </div>
-                  <button type="button" onClick={() => setInfoPanelOpen(false)}
-                    className="text-muted-foreground/40 hover:text-muted-foreground transition-colors">
-                    <ChevronUp size={11} />
-                  </button>
-                </div>
-                {infoDesc && (
-                  <p className="text-[10px] text-muted-foreground leading-relaxed mb-2 line-clamp-3">
-                    {infoDesc}
-                  </p>
-                )}
-                <div className="flex items-center gap-3 text-[10px] text-muted-foreground/60">
-                  <span className="flex items-center gap-1">
-                    <ListChecks size={9} /> {infoSteps} step{infoSteps !== 1 ? "s" : ""}
-                  </span>
-                  {mode === "blueprint" && blueprint?.version && (
-                    <span className="flex items-center gap-1">
-                      <GitBranch size={9} /> v{blueprint.version}
-                    </span>
-                  )}
-                </div>
-              </div>
+              <WorkflowInfoCard
+                mode={mode}
+                name={infoName}
+                description={infoDesc}
+                steps={steps}
+                blueprint={blueprint}
+                agents={agents}
+                onClose={() => setInfoPanelOpen(false)}
+                onOpenTab={onOpenBottomTab}
+              />
             ) : (
               <button type="button" onClick={() => setInfoPanelOpen(true)}
                 className="flex items-center gap-1.5 rounded-lg border border-border bg-card/80 backdrop-blur px-2.5 py-1.5 text-[10px] text-muted-foreground hover:text-foreground hover:border-[var(--grace-accent)]/40 transition-colors shadow-md">
                 <Info size={10} />
-                <span className="font-medium truncate max-w-28">{infoName}</span>
+                <span className="font-medium truncate max-w-32">{infoName}</span>
                 <ChevronDown size={9} className="text-muted-foreground/50" />
               </button>
             )}
@@ -973,12 +1100,14 @@ function MetaItem({ label, value }: { label: string; value?: string }) {
 
 function BottomPanel({
   mode, blueprint, instance, runRecord,
+  activeTab, open, onSetActiveTab, onSetOpen,
 }: {
   mode: StudioMode; blueprint?: Blueprint | null; instance?: Instance | null;
   runRecord: RunRecord | null;
+  activeTab: BottomTab; open: boolean;
+  onSetActiveTab: (t: BottomTab) => void;
+  onSetOpen: (v: boolean) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<BottomTab>("steps");
-  const [open, setOpen] = useState(true);
 
   const bpSteps = blueprint?.steps ?? [];
   const instSteps = instance?.graphSnapshot ?? [];
@@ -1008,7 +1137,7 @@ function BottomPanel({
   // Reset active tab if it's no longer visible
   useEffect(() => {
     if (!TABS.find((t) => t.id === activeTab)) {
-      setActiveTab(TABS[0]?.id ?? "steps");
+      onSetActiveTab(TABS[0]?.id ?? "steps");
     }
   }, [mode]);
 
@@ -1020,7 +1149,7 @@ function BottomPanel({
       <div className="flex items-center gap-0 border-b border-border/60 h-8 shrink-0 px-1 overflow-x-auto">
         {TABS.map((tab) => (
           <button key={tab.id} type="button"
-            onClick={() => { setActiveTab(tab.id); if (!open) setOpen(true); }}
+            onClick={() => { onSetActiveTab(tab.id); if (!open) onSetOpen(true); }}
             className={cn(
               "flex items-center gap-1.5 px-3 h-full text-xs font-medium transition-colors border-b-2 whitespace-nowrap",
               activeTab === tab.id && open
@@ -1035,7 +1164,7 @@ function BottomPanel({
             )}
           </button>
         ))}
-        <button type="button" onClick={() => setOpen((o) => !o)}
+        <button type="button" onClick={() => onSetOpen(!open)}
           className="ml-auto flex items-center justify-center w-7 h-7 shrink-0 text-muted-foreground/50 hover:text-muted-foreground transition-colors"
           title={open ? "Collapse" : "Expand"}>
           {open ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
@@ -1262,6 +1391,15 @@ export function GraceStudio() {
 
   // Step inspector state
   const [selectedStep, setSelectedStep] = useState<FlowStep | null>(null);
+
+  // Bottom panel state — lifted so info panel can open tabs
+  const [bottomActiveTab, setBottomActiveTab] = useState<BottomTab>("steps");
+  const [bottomOpen, setBottomOpen] = useState(true);
+
+  function openBottomTab(tab: BottomTab) {
+    setBottomActiveTab(tab);
+    setBottomOpen(true);
+  }
 
   const mode: StudioMode = blueprintId ? "blueprint" : instanceId ? "instance" : "landing";
   const providerConnected = providerService.isConnected();
@@ -1590,6 +1728,7 @@ export function GraceStudio() {
           onInspect={(step) => setSelectedStep(step)}
           onInspectorClose={() => setSelectedStep(null)}
           runRecord={runRecord}
+          onOpenBottomTab={openBottomTab}
         />
 
         <RightPanel
@@ -1601,7 +1740,11 @@ export function GraceStudio() {
         />
       </div>
 
-      <BottomPanel mode={mode} blueprint={blueprint} instance={instance} runRecord={runRecord} />
+      <BottomPanel
+        mode={mode} blueprint={blueprint} instance={instance} runRecord={runRecord}
+        activeTab={bottomActiveTab} open={bottomOpen}
+        onSetActiveTab={setBottomActiveTab} onSetOpen={setBottomOpen}
+      />
 
       {blueprint && (
         <CreateInstanceModal
