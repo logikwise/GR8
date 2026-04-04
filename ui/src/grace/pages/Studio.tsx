@@ -29,7 +29,9 @@ import {
   Info, ChevronRight, Tag, Calendar, Hash, Clock, PlayCircle,
   Activity, GripVertical, Square, Send, Plug, WifiOff,
   CheckCircle2, Loader2, Trash2, AlertTriangle, Paperclip, Link2, ExternalLink, X,
+  Workflow, ArrowRight,
 } from "lucide-react";
+import { CreateWorkflowModal } from "../components/CreateWorkflowModal";
 import { InputsPanel } from "../components/InputsPanel";
 import { OutputCard } from "../components/OutputCard";
 import type { OutputCardData } from "../components/OutputCard";
@@ -1369,6 +1371,146 @@ const CHAT_MIN = 160;
 const CHAT_MAX = 520;
 const CHAT_DEFAULT = 224;
 
+// ─── Studio Entry Modal ───────────────────────────────────────────────────────
+
+interface EntryAction {
+  key: string;
+  icon: React.ReactNode;
+  iconBg: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  onClick: () => void;
+}
+
+function StudioEntryModal({
+  open,
+  onClose,
+  onNewBlueprint,
+  onBrowseBlueprints,
+  onBrowseInstances,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onNewBlueprint: () => void;
+  onBrowseBlueprints: () => void;
+  onBrowseInstances: () => void;
+}) {
+  const actions: EntryAction[] = [
+    {
+      key: "blueprints",
+      icon: <Workflow size={22} />,
+      iconBg: "bg-violet-500/15 text-violet-400 border-violet-500/25",
+      title: "Blueprints",
+      subtitle: "Browse & Preview",
+      description: "Explore your saved workflow blueprints, inspect steps, agents, skills, and tools.",
+      onClick: onBrowseBlueprints,
+    },
+    {
+      key: "new",
+      icon: <PenLine size={22} />,
+      iconBg: "bg-[var(--grace-accent)]/15 text-[var(--grace-accent)] border-[var(--grace-accent)]/25",
+      title: "New Blueprint",
+      subtitle: "Design from Scratch",
+      description: "Define a new multi-step agent workflow. Set agents, skills, tools, and run order.",
+      onClick: onNewBlueprint,
+    },
+    {
+      key: "instances",
+      icon: <Box size={22} />,
+      iconBg: "bg-indigo-500/15 text-indigo-400 border-indigo-500/25",
+      title: "Instances",
+      subtitle: "Run & Monitor",
+      description: "Launch a workflow instance from any blueprint, track live run status and outputs.",
+      onClick: onBrowseInstances,
+    },
+  ];
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(6px)" }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="relative w-full max-w-2xl mx-4 rounded-2xl border border-border/60 bg-card shadow-2xl overflow-hidden">
+
+        {/* Subtle constellation background */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+          <div className="absolute top-4 right-12 w-32 h-24 rounded-xl border border-border/10 bg-[var(--grace-accent)]/3" />
+          <div className="absolute bottom-8 left-6 w-20 h-16 rounded-lg border border-border/10" />
+          <div className="absolute top-1/2 left-1/2 w-1.5 h-1.5 rounded-full bg-[var(--grace-accent)]/20" />
+          <div className="absolute top-1/3 right-1/4 w-1 h-1 rounded-full bg-[var(--grace-accent)]/15" />
+        </div>
+
+        {/* Header */}
+        <div className="relative px-8 pt-8 pb-6">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-[9px] tracking-[0.22em] uppercase text-[var(--grace-accent)] font-semibold mb-2">
+                STUDIO
+              </p>
+              <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                What would you like to do?
+              </h2>
+              <p className="text-sm text-muted-foreground/60 mt-1">
+                Choose an action to get started in the workflow studio.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-muted-foreground/30 hover:text-muted-foreground transition-colors p-1 -mt-1 -mr-1"
+              title="Close"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Action cards */}
+        <div className="relative px-8 pb-8 grid grid-cols-3 gap-4">
+          {actions.map((action) => (
+            <button
+              key={action.key}
+              type="button"
+              onClick={action.onClick}
+              className="group flex flex-col items-start gap-3 rounded-xl border border-border/50 bg-card/60 p-5 text-left transition-all duration-200 hover:border-[var(--grace-accent)]/40 hover:bg-[var(--grace-accent)]/5 hover:shadow-lg hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--grace-accent)]"
+            >
+              {/* Icon badge */}
+              <div className={cn(
+                "flex items-center justify-center w-10 h-10 rounded-lg border",
+                action.iconBg,
+              )}>
+                {action.icon}
+              </div>
+
+              {/* Text */}
+              <div className="flex-1">
+                <p className="text-[9px] tracking-[0.15em] uppercase text-muted-foreground/50 mb-1">
+                  {action.subtitle}
+                </p>
+                <p className="text-sm font-semibold text-foreground mb-1.5 group-hover:text-[var(--grace-accent)] transition-colors">
+                  {action.title}
+                </p>
+                <p className="text-[11px] text-muted-foreground/60 leading-relaxed">
+                  {action.description}
+                </p>
+              </div>
+
+              {/* Arrow */}
+              <div className="self-end text-muted-foreground/30 group-hover:text-[var(--grace-accent)]/60 transition-colors">
+                <ArrowRight size={13} />
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function GraceStudio() {
   const { blueprintId, instanceId } = useParams<{ blueprintId?: string; instanceId?: string }>();
   const navigate = useNavigate();
@@ -1381,6 +1523,15 @@ export function GraceStudio() {
   const [leftOpen, setLeftOpen] = useState(false);
   const [centerTab, setCenterTab] = useState<CenterTab>("flow");
   const [chatWidth, setChatWidth] = useState(CHAT_DEFAULT);
+
+  // Studio entry modal
+  const [entryOpen, setEntryOpen] = useState(true);
+  const [newBlueprintOpen, setNewBlueprintOpen] = useState(false);
+
+  // Re-open entry modal whenever user lands back on /grace/studio
+  useEffect(() => {
+    if (mode === "landing") setEntryOpen(true);
+  }, [mode]);
 
   // Run state
   const [runRecord, setRunRecord] = useState<RunRecord | null>(null);
@@ -1762,6 +1913,29 @@ export function GraceStudio() {
         confirmLabel="Delete"
         onConfirm={handleDeleteInstance}
         onCancel={() => setDeleteOpen(false)}
+      />
+
+      {/* Studio entry modal — shown automatically on landing */}
+      {mode === "landing" && (
+        <StudioEntryModal
+          open={entryOpen}
+          onClose={() => setEntryOpen(false)}
+          onBrowseBlueprints={() => navigate("/grace/library")}
+          onNewBlueprint={() => {
+            setEntryOpen(false);
+            setNewBlueprintOpen(true);
+          }}
+          onBrowseInstances={() => navigate("/grace/instances")}
+        />
+      )}
+
+      <CreateWorkflowModal
+        open={newBlueprintOpen}
+        onClose={() => setNewBlueprintOpen(false)}
+        onCreated={(bp) => {
+          setNewBlueprintOpen(false);
+          navigate(`/grace/studio/blueprint/${bp.id}`);
+        }}
       />
     </div>
   );
