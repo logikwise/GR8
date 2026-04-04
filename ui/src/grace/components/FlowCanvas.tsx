@@ -36,9 +36,21 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import {
   AlignHorizontalDistributeCenter, Map,
-  Search, BarChart2, FileText, Download, Globe, Send, Play,
+  Search, BarChart2, BarChart, BarChart3, BarChart4,
+  FileText, FileCode, FilePlus, FileSearch,
+  Download, Globe, Send, Play, Pause, StopCircle,
   Cpu, Layers, AlignLeft, Calendar, Workflow, ScanSearch,
   Zap, Wrench, PenLine, CheckCircle2, Star, Database, Filter,
+  Eye, Target, TrendingUp, TrendingDown, DollarSign,
+  Bot, Brain, Rocket, Terminal, Shield, Lightbulb, Sparkles,
+  Flame, Bug, Cog, Lock, Mail, MessageSquare, Package,
+  Puzzle, Radar, Swords, Telescope, Microscope, Crown, Gem,
+  Hexagon, Pentagon, Fingerprint, Atom, CircuitBoard,
+  GitBranch, Hammer, Heart, Wand2, Code, ClipboardList,
+  SlidersHorizontal, RefreshCw, AlertTriangle, Bell, Bookmark,
+  ChevronRight, Inbox, Key, Link, Map as MapIcon, Move,
+  Table, Upload, Video, Wifi, X, Settings,
+  type LucideIcon,
 } from "lucide-react";
 import type { FlowStep } from "./FlowStepCard";
 import type { StudioAgent } from "./GraphCanvas";
@@ -108,16 +120,61 @@ function trunc(s: string, max = 13): string {
   return s.length > max ? s.slice(0, max - 1) + "…" : s;
 }
 
-/** Derive a lucide icon for a step based on its name/role keywords */
+// ─── Icon name → Lucide component map (covers all sampleBlueprint names + common extras) ──
+
+const STEP_ICON_LOOKUP: Record<string, LucideIcon> = {
+  // explicitly named in sample blueprints
+  Search, Globe, Eye, BarChart2, FileText, Target, TrendingUp, TrendingDown,
+  DollarSign, Download, CheckCircle2, ScanSearch, Star, PenLine, Send,
+  // common extras
+  BarChart, BarChart3, BarChart4,
+  FileCode, FilePlus, FileSearch,
+  Play, Pause, StopCircle,
+  Cpu, Layers, AlignLeft, Calendar, Workflow, Zap, Wrench,
+  Database, Filter,
+  Bot, Brain, Rocket, Terminal, Shield, Lightbulb, Sparkles, Flame,
+  Bug, Cog, Lock, Mail, MessageSquare, Package, Puzzle, Radar,
+  Swords, Telescope, Microscope, Crown, Gem, Hexagon, Pentagon,
+  Fingerprint, Atom, CircuitBoard, GitBranch, Hammer, Heart, Wand2,
+  Code, ClipboardList, SlidersHorizontal, RefreshCw, AlertTriangle,
+  Bell, Bookmark, ChevronRight, Inbox, Key, Link, Map: MapIcon, Move,
+  Table, Upload, Video, Wifi, X, Settings,
+};
+
+/** Initials fallback: up to 2 chars from step name words */
+function StepInitials({ step, color }: { step: FlowStep; color: string }) {
+  const words = step.name.trim().split(/\s+/);
+  const initials = words.length >= 2
+    ? (words[0][0] + words[1][0]).toUpperCase()
+    : step.name.slice(0, 2).toUpperCase();
+  return (
+    <span style={{
+      fontSize: 13, fontWeight: 700, color, lineHeight: 1,
+      fontFamily: "var(--font-mono, monospace)", letterSpacing: "0.05em",
+    }}>
+      {initials}
+    </span>
+  );
+}
+
+/** Derive a lucide icon for a step — handles emoji, icon-name string, keyword matching, initials */
 function StepIcon({ step, color }: { step: FlowStep; color: string }) {
-  // If the blueprint/step provided an explicit emoji icon, render it
+  const sz = 20;
+  const props = { size: sz, color, strokeWidth: 1.8 };
+
+  // 1. Explicit emoji
   if (step.icon && /\p{Emoji}/u.test(step.icon)) {
     return <span style={{ fontSize: 18, lineHeight: 1 }}>{step.icon}</span>;
   }
 
+  // 2. Named Lucide icon (e.g. "BarChart2", "Globe", "DollarSign")
+  if (step.icon) {
+    const Comp = STEP_ICON_LOOKUP[step.icon];
+    if (Comp) return <Comp {...props} />;
+  }
+
+  // 3. Keyword matching on step name + role
   const key = `${step.name} ${step.agentRole ?? ""}`.toLowerCase();
-  const sz  = 20;
-  const props = { size: sz, color, strokeWidth: 1.8 };
 
   if (/search|find|discover|lookup|look.?up|query/.test(key))         return <Search {...props} />;
   if (/web|scrape|crawl|browse|fetch.*url|browser/.test(key))         return <Globe {...props} />;
@@ -138,8 +195,13 @@ function StepIcon({ step, color }: { step: FlowStep; color: string }) {
   if (/tool|wrench|api|integrat/.test(key))                           return <Wrench {...props} />;
   if (/data|database|storage|store/.test(key))                        return <Database {...props} />;
   if (/filter|refin|narrow|select/.test(key))                         return <Filter {...props} />;
+  if (/price|pric|cost|dollar|payment|financ/.test(key))             return <DollarSign {...props} />;
+  if (/trend|growth|increas|upward/.test(key))                        return <TrendingUp {...props} />;
+  if (/target|goal|aim|objective/.test(key))                          return <Target {...props} />;
+  if (/view|watch|monitor|observ|eye/.test(key))                      return <Eye {...props} />;
 
-  return <Workflow {...props} />;
+  // 4. Initials fallback — never renders raw text
+  return <StepInitials step={step} color={color} />;
 }
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
