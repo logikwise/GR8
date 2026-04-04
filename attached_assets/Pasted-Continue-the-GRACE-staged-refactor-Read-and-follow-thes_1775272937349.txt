@@ -1,0 +1,404 @@
+Continue the GRACE staged refactor. Read and follow these files first:
+
+* docs/product-model.md
+* docs/architecture-plan.md
+* docs/studio-spec.md
+* docs/replit-guardrails.md
+* docs/legacy-capability-inventory.md
+* docs/runtime-translation-layer.md
+
+This is the next phase after the React Flow canvas/runtime loop phase.
+
+Primary objective:
+Make GRACE execution **runtime-ready** by adding agent discovery, binding, and preflight readiness checks so users do not attempt runs that are guaranteed to fail. This phase should improve the Connections → Instance → Run path so a user can see exactly what is missing before running, especially around OpenClaw pairing and agent availability.
+
+This phase is NOT about broad UI redesign.
+This phase is NOT about the full terminology cleanup.
+This phase is NOT about the org/workspace refactor.
+
+It is about:
+
+1. discovering real agents if available
+2. binding them to instances/workflow roles
+3. checking runtime readiness before dispatch
+4. classifying failures honestly
+5. making run/start behavior more trustworthy
+
+Do NOT remove backend/runtime/orchestration/adapters.
+Do NOT rewrite adapter internals yet.
+Do NOT do the full Paperclip terminology refactor in this phase.
+Do NOT overbuild Mission Control.
+Do NOT fake agent discovery or provider capability support.
+
+## Phase goal
+
+At the end of this phase, a user should be able to:
+
+1. configure an OpenClaw connection
+2. see whether the provider is:
+
+   * reachable
+   * paired/approved
+   * execution-ready
+3. discover available agents if the provider supports it
+4. bind a required primary agent to an instance
+5. understand missing prerequisites before clicking Start Run
+6. see clean, actionable readiness/preflight results instead of failing blindly
+7. start a run only when minimum runtime requirements are met, or explicitly choose a debug/force path if you keep one
+
+## Critical product rules
+
+* Blueprint cannot run directly
+* Only Instances can run
+* Studio remains instance-centric
+* Studio graph and flow remain instance-contained
+* Workspace swarm remains outside Studio
+* Provider capabilities must remain granular and honest:
+
+  * healthCheck
+  * runDispatch
+  * eventStream
+  * eventPoll
+  * chatInteraction
+  * agentDiscovery
+  * outputListing
+* A healthy provider connection does NOT imply pairing, agent discovery, or execution readiness
+* No core GRACE asset or runtime-critical state may rely only on module memory
+
+## A. Provider readiness model
+
+Add a more complete provider/runtime readiness model, especially for OpenClaw.
+
+Right now health check alone is insufficient.
+We need to distinguish between:
+
+* provider reachable
+* pairing approved
+* agents available
+* runtime dispatch ready
+
+Create or extend a readiness model such as:
+
+* reachable
+* paired
+* agentsAvailable
+* executionReady
+* lastCheckedAt
+* details/errors
+
+Use this in both:
+
+* Connections page
+* Instance/Studio run readiness checks
+
+### A1. OpenClaw pairing/approval state
+
+If possible through preserved code, detect and surface whether the connection is:
+
+* reachable but pairing required
+* reachable and paired/approved
+* reachable but missing necessary scope/permissions
+* not reachable
+
+If pairing status cannot be directly queried, infer the best truthful readiness state from recent probe/run failures and present that clearly.
+
+Do not label the provider “ready” if the system knows pairing is still required.
+
+## B. Agent discovery (main feature)
+
+This is the biggest missing piece.
+
+If preserved OpenClaw code can expose agent/worker/device metadata, start using it.
+
+### B1. Discovery path
+
+Inspect preserved backend/runtime/adapter code for any available way to:
+
+* list agents
+* list available workers/devices
+* list executable identities
+* get agent metadata
+
+Reuse preserved code first if possible.
+
+If no direct list endpoint exists but there is a plausible compatibility path, implement the cleanest minimal server route required.
+
+### B2. Provider capability model
+
+If agent discovery becomes available, update OpenClaw provider capabilities accordingly.
+If not available, leave it honest and partial.
+
+### B3. Agent model
+
+Create or refine an agent record shape such as:
+
+* id
+* provider
+* providerAgentId
+* name
+* type
+* model?
+* status?
+* capabilities?
+* metadata
+
+Persist discovered agents via a service layer if useful for refresh stability, but clearly mark cache vs live state.
+
+### B4. Connections page
+
+Upgrade the Connections/OpenClaw page so users can:
+
+* test connection
+* see readiness state
+* see discovered agents if available
+* see a clear message if no agents can be discovered yet
+
+## C. Instance agent binding
+
+An instance should no longer assume an abstract agent forever.
+
+Add or improve instance-level binding for:
+
+* primary agent
+* specialist agent roles later if available
+
+### C1. Binding UI
+
+In instance creation or instance editing, add a binding UI for the primary agent:
+
+* if discovered agents are available, let user choose one
+* if no agents are available, show a clear state and next steps
+
+### C2. Binding persistence
+
+Persist the selected agent binding on the instance:
+
+* primary agent id
+* provider
+* any provider-specific reference needed
+
+This must survive refresh.
+
+### C3. Studio root node
+
+If a real agent is bound, the Studio root agent node should reflect that binding:
+
+* name
+* provider
+* status if known
+* details in inspector
+
+If not bound:
+
+* show unbound state clearly
+* do not pretend the root node is fully real
+
+## D. Runtime preflight / readiness checks before Start Run
+
+This is the most important UX improvement.
+
+Before allowing a normal Start Run, evaluate readiness.
+
+### D1. Preflight categories
+
+At minimum, check:
+
+* provider configured
+* provider reachable
+* pairing approved / execution-ready
+* required primary agent bound
+* instance valid
+* required workflow questions answered
+* inputs attached if required by workflow (optional if not supported yet)
+
+### D2. Preflight result UI
+
+Show a clear readiness card or modal with:
+
+Ready items:
+
+* provider reachable
+* instance valid
+* etc.
+
+Blocking items:
+
+* pairing required
+* no agent bound
+* no discovered agents
+* provider capability missing
+
+### D3. Start Run behavior
+
+Preferred behavior:
+
+* disable standard Start Run when blocking readiness errors exist
+* show why
+* optionally expose a clearly labeled advanced/debug override ONLY if low-risk and useful
+
+Do not keep silently attempting runs that are known to fail due to missing pairing or missing agent binding.
+
+## E. Failure classification and messaging
+
+Improve failure messaging so users understand what kind of problem occurred.
+
+Differentiate between:
+
+* connection failure
+* pairing failure
+* permission/scope failure
+* no agent bound
+* no agent discovered
+* dispatch failure
+* runtime execution failure
+
+### E1. GRACE-facing summary
+
+The Runtime/Chat/Status surfaces should show a clean summary like:
+
+* Provider reachable but pairing approval is still required
+* No primary agent is bound to this instance
+* Provider dispatch failed due to missing approval scope
+* Execution started but runtime failed
+
+### E2. Raw provider trace
+
+Keep raw provider details available in Logs/Trace for debugging.
+Do not hide useful low-level information.
+But do not force users to interpret raw provider logs for basic readiness issues.
+
+## F. Studio runtime usability tied to readiness
+
+Make Studio reflect readiness more clearly.
+
+### F1. Header/status
+
+In Studio, show runtime readiness status near the provider/instance controls:
+
+* Ready
+* Needs pairing
+* Needs agent binding
+* Provider unavailable
+* Unknown
+
+### F2. Root node / agent state
+
+The root agent node should show:
+
+* bound and ready
+* bound but unknown
+* unbound
+* unavailable
+
+### F3. Runtime edge visuals
+
+Do not animate runtime step edges just because a run dispatch was attempted.
+Only animate when true step-running state exists.
+This avoids false visual signals when the run fails before execution actually begins.
+
+## G. Connections and Settings cleanup for runtime setup
+
+Focus only on what helps execution readiness.
+
+### G1. User/profile/settings links
+
+If any visible user/settings/profile routes in GRACE still go to legacy/base system unexpectedly, clean or isolate them enough so runtime setup is not confusing.
+
+### G2. OpenClaw setup guidance
+
+Add a GRACE-facing setup hint where useful, for example:
+
+* provider reachable
+* pairing pending
+* approve latest device in OpenClaw
+* persist device key for reuse
+
+Keep it concise and actionable.
+
+## H. Inputs / outputs / runtime state sanity
+
+Do a small supporting pass only where it helps readiness/testing.
+
+### H1. Inputs
+
+Continue persisting input assets.
+If inputs are attached to the run, show that in the preflight/readiness summary or runtime context.
+
+### H2. Outputs
+
+No major redesign needed in this phase, but preserve current output persistence behavior and do not regress it.
+
+### H3. Runtime state persistence
+
+Ensure these survive refresh:
+
+* provider config
+* readiness state if cached
+* instance binding
+* active run state
+* run records
+* input assets
+
+## I. Legacy capability preservation
+
+Do not delete inbox/task routing or other preserved legacy features in this phase.
+This phase should not bury them further.
+Just avoid letting them interfere with the GRACE runtime flow.
+
+## J. Non-goals
+
+Do NOT fully implement:
+
+* full Paperclip terminology/internal refactor
+* full org/workspace tenancy
+* budgets/approvals enforcement
+* billing/invoicing
+* full multi-provider rollout beyond OpenClaw-first architecture
+* broad Studio redesign
+* full interactive provider chat if unsupported
+* Mission Control reintegration
+
+## Deliverables
+
+1. provider readiness is more accurately modeled than simple health check
+2. OpenClaw pairing/readiness issues are surfaced clearly
+3. agent discovery is implemented if supported, or the capability gap is explicitly handled
+4. instance primary agent binding exists and persists
+5. Start Run uses readiness/preflight checks
+6. failure messages are more clearly classified
+7. Studio reflects agent binding/readiness state more truthfully
+8. runtime visuals no longer imply step execution when runs fail before execution begins
+9. GRACE remains stable on refresh and routing does not regress
+10. current MVP execution path is preserved
+
+## Final self-audit (REQUIRED)
+
+At the end, provide a strict expectation audit with:
+
+* 👍 = meets expectation
+* ⚠️ = partial / caveated
+* ❌ = not yet met
+
+Audit categories:
+
+* [ ] provider readiness model
+* [ ] pairing/readiness visibility
+* [ ] agent discovery progress
+* [ ] agent binding persistence
+* [ ] preflight/run-readiness checks
+* [ ] failure classification clarity
+* [ ] Studio readiness/agent state truthfulness
+* [ ] runtime visual truthfulness
+* [ ] refresh/deep-link stability preserved
+* [ ] no in-memory-only runtime-critical state
+* [ ] provider-agnostic architecture preserved
+
+Also include:
+
+1. summary of files created/changed
+2. explanation of what exact steps a user can now perform before running
+3. explanation of whether OpenClaw agents are truly discoverable now
+4. explanation of how preflight/readiness is evaluated
+5. explanation of how binding is stored on the instance
+6. explanation of any remaining blockers for a true simple run
+7. deferred items for the next phase
