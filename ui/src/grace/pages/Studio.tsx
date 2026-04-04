@@ -702,20 +702,27 @@ function WorkflowInfoCard({
   const version = blueprint?.version;
   const [expanded, setExpanded] = useState(false);
 
-  const MAX_PILLS = 4;
+  type PillTone = "neutral" | "violet" | "amber";
 
   function Pill({
-    label, onClick,
-  }: { label: string; onClick?: () => void }) {
+    label, tone = "neutral", onClick,
+  }: { label: string; tone?: PillTone; onClick?: () => void }) {
+    const colors: Record<PillTone, string> = {
+      neutral: "border-border/60 bg-card text-muted-foreground/70 cursor-default",
+      violet:  onClick
+        ? "border-violet-500/30 bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 cursor-pointer"
+        : "border-violet-500/20 bg-violet-500/8 text-violet-400/70 cursor-default",
+      amber:   onClick
+        ? "border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 cursor-pointer"
+        : "border-amber-500/20 bg-amber-500/8 text-amber-400/70 cursor-default",
+    };
     return (
       <button
         type="button"
         onClick={onClick}
         className={cn(
-          "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors leading-tight",
-          onClick
-            ? "border-[var(--grace-accent)]/30 bg-[var(--grace-accent)]/10 text-[var(--grace-accent)] hover:bg-[var(--grace-accent)]/20 cursor-pointer"
-            : "border-border/60 bg-card text-muted-foreground/70 cursor-default"
+          "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors leading-tight truncate",
+          colors[tone],
         )}
       >
         {label}
@@ -724,33 +731,28 @@ function WorkflowInfoCard({
   }
 
   function Section({
-    label, items, tab,
-  }: { label: string; items: string[]; tab?: BottomTab }) {
+    label, items, tab, tone = "neutral", grid,
+  }: { label: string; items: string[]; tab?: BottomTab; tone?: PillTone; grid?: boolean }) {
     if (items.length === 0) return null;
-    const shown = items.slice(0, MAX_PILLS);
-    const extra = items.length - shown.length;
     return (
       <div className="space-y-1.5">
         <p className="text-[9px] tracking-[0.15em] uppercase text-muted-foreground/40 font-medium">
           {label}
         </p>
-        <div className="flex flex-wrap gap-1.5">
-          {shown.map((item) => (
-            <Pill key={item} label={item} onClick={tab ? () => onOpenTab?.(tab) : undefined} />
+        <div className={cn(grid ? "grid grid-cols-2 gap-1" : "flex flex-wrap gap-1.5")}>
+          {items.map((item) => (
+            <Pill key={item} label={item} tone={tone} onClick={tab ? () => onOpenTab?.(tab) : undefined} />
           ))}
-          {extra > 0 && (
-            <Pill
-              label={`+${extra} more`}
-              onClick={tab ? () => onOpenTab?.(tab) : undefined}
-            />
-          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-border/60 bg-card/95 backdrop-blur-md shadow-2xl w-72 overflow-hidden">
+    <div className={cn(
+      "rounded-xl border border-border/60 bg-card/95 backdrop-blur-md shadow-2xl overflow-hidden transition-all duration-200",
+      expanded ? "w-96" : "w-72",
+    )}>
       {/* ── Collapsed header (always visible) ── */}
       <div className="p-4 pb-3">
         <div className="flex items-start justify-between mb-1.5">
@@ -798,16 +800,21 @@ function WorkflowInfoCard({
             label="Agents"
             items={usedAgents.map((a) => a.label)}
             tab={undefined}
+            tone="neutral"
           />
           <Section
             label="Skills"
             items={allSkills.map((s) => s.name)}
             tab="skills"
+            tone="violet"
+            grid
           />
           <Section
             label="Tools"
             items={allTools.map((t) => t.name)}
             tab="tools"
+            tone="amber"
+            grid
           />
 
           {/* Footer row */}
@@ -822,11 +829,18 @@ function WorkflowInfoCard({
                 </span>
               )}
             </div>
-            <button type="button"
-              onClick={() => onOpenTab?.("steps")}
-              className="flex items-center gap-1 text-[10px] text-[var(--grace-accent)]/70 hover:text-[var(--grace-accent)] transition-colors font-medium">
-              View steps <ChevronRight size={9} />
-            </button>
+            <div className="flex items-center gap-3">
+              <button type="button"
+                onClick={() => onOpenTab?.("meta")}
+                className="flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors font-medium">
+                <FileText size={9} /> View MD
+              </button>
+              <button type="button"
+                onClick={() => onOpenTab?.("steps")}
+                className="flex items-center gap-1 text-[10px] text-[var(--grace-accent)]/70 hover:text-[var(--grace-accent)] transition-colors font-medium">
+                View steps <ChevronRight size={9} />
+              </button>
+            </div>
           </div>
         </div>
       )}
