@@ -798,7 +798,7 @@ function WorkflowInfoCard({
               {/* Skills column */}
               <div className="space-y-1.5">
                 <p className="text-[9px] tracking-[0.15em] uppercase text-muted-foreground/40 font-medium">Skills</p>
-                <div className="flex flex-col gap-1 items-start">
+                <div className="flex flex-wrap gap-1">
                   {allSkills.map((s) => (
                     <Pill key={s.id} label={s.name} tone="violet" onClick={() => onOpenTab?.("skills")} />
                   ))}
@@ -807,7 +807,7 @@ function WorkflowInfoCard({
               {/* Tools column */}
               <div className="space-y-1.5">
                 <p className="text-[9px] tracking-[0.15em] uppercase text-muted-foreground/40 font-medium">Tools</p>
-                <div className="flex flex-col gap-1 items-start">
+                <div className="flex flex-wrap gap-1">
                   {allTools.map((t) => (
                     <Pill key={t.id} label={t.name} tone="amber" onClick={() => onOpenTab?.("tools")} />
                   ))}
