@@ -228,8 +228,8 @@ function computeEnergy(nodes: GraphNode[]): number {
 const NODE_COLOR: Record<NodeType, string> = {
   agent:  "#a78bfa",
   step:   "#a78bfa",
-  skill:  "#34d399",
-  tool:   "#60a5fa",
+  skill:  "#8b5cf6",  // violet — matches FlowCanvas + StepInspector
+  tool:   "#f59e0b",  // amber  — matches FlowCanvas + StepInspector
   output: "#fb923c",
 };
 
