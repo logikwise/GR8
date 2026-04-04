@@ -29,9 +29,10 @@ import {
   Info, ChevronRight, Tag, Calendar, Hash, Clock, PlayCircle,
   Activity, GripVertical, Square, Send, Plug, WifiOff,
   CheckCircle2, Loader2, Trash2, AlertTriangle, Paperclip, Link2, ExternalLink, X,
-  Workflow, ArrowRight,
+  Workflow, ArrowRight, Settings2,
 } from "lucide-react";
 import { CreateWorkflowModal } from "../components/CreateWorkflowModal";
+import { EditInstanceModal } from "../components/EditInstanceModal";
 import { InputsPanel } from "../components/InputsPanel";
 import { OutputCard } from "../components/OutputCard";
 import type { OutputCardData } from "../components/OutputCard";
@@ -112,10 +113,11 @@ function MetaLine({ icon, label, value }: { icon?: React.ReactNode; label: strin
 }
 
 function LeftPanel({
-  mode, blueprint, instance, onDeleteInstance,
+  mode, blueprint, instance, onDeleteInstance, onEditAgents,
 }: {
   mode: StudioMode; blueprint?: Blueprint | null; instance?: Instance | null;
   onDeleteInstance?: () => void;
+  onEditAgents?: () => void;
 }) {
   return (
     <aside className="flex w-52 shrink-0 flex-col border-r border-border bg-card overflow-y-auto">
@@ -133,22 +135,47 @@ function LeftPanel({
           </LeftPanelSection>
           {(blueprint.agentConfig.primary || (blueprint.agentConfig.specialists?.length ?? 0) > 0) && (
             <LeftPanelSection title="Agents">
-              {blueprint.agentConfig.primary && (
-                <div className="text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <CircleDot size={9} className="text-[var(--grace-accent)]/60" />
-                    <span className="font-medium truncate">{blueprint.agentConfig.primary.label}</span>
+              {blueprint.agentConfig.primary && (() => {
+                const ag = blueprint.agentConfig.primary!;
+                return (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <CircleDot size={9} className="text-[var(--grace-accent)]/70 shrink-0" />
+                      <span className="text-xs font-medium truncate">{ag.label}</span>
+                      <span className="ml-auto rounded-full bg-[var(--grace-accent)]/10 px-1.5 py-0.5 text-[9px] font-medium text-[var(--grace-accent)]/70 uppercase tracking-wide shrink-0">primary</span>
+                    </div>
+                    {ag.description && (
+                      <p className="ml-3.5 text-[10px] text-muted-foreground/70 leading-relaxed">{ag.description}</p>
+                    )}
+                    {(ag.capabilities?.length ?? 0) > 0 && (
+                      <div className="ml-3.5 flex flex-wrap gap-1 pt-0.5">
+                        {ag.capabilities!.map((cap) => (
+                          <span key={cap} className="rounded-full bg-muted/60 px-1.5 py-0.5 text-[9px] text-muted-foreground">{cap}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <span className="ml-3.5 text-[10px] text-muted-foreground/60">primary</span>
-                </div>
-              )}
+                );
+              })()}
               {blueprint.agentConfig.specialists?.map((sp) => (
-                <div key={sp.label} className="text-xs">
+                <div key={sp.label} className="space-y-1 pt-1 border-t border-border/40 first-of-type:border-0">
                   <div className="flex items-center gap-1.5">
-                    <CircleDot size={9} className="text-muted-foreground/40" />
-                    <span className="font-medium truncate">{sp.label}</span>
+                    <CircleDot size={9} className="text-muted-foreground/40 shrink-0" />
+                    <span className="text-xs font-medium truncate">{sp.label}</span>
+                    <span className="ml-auto rounded-full bg-muted/60 px-1.5 py-0.5 text-[9px] text-muted-foreground uppercase tracking-wide shrink-0">
+                      {sp.required ? "required" : "optional"}
+                    </span>
                   </div>
-                  <span className="ml-3.5 text-[10px] text-muted-foreground/60">specialist{!sp.required ? " · optional" : ""}</span>
+                  {sp.description && (
+                    <p className="ml-3.5 text-[10px] text-muted-foreground/70 leading-relaxed">{sp.description}</p>
+                  )}
+                  {(sp.capabilities?.length ?? 0) > 0 && (
+                    <div className="ml-3.5 flex flex-wrap gap-1 pt-0.5">
+                      {sp.capabilities!.map((cap) => (
+                        <span key={cap} className="rounded-full bg-muted/60 px-1.5 py-0.5 text-[9px] text-muted-foreground">{cap}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </LeftPanelSection>
@@ -184,19 +211,71 @@ function LeftPanel({
             <MetaLine icon={<Clock size={10} />} label="Created" value={new Date(instance.createdAt).toLocaleDateString()} />
             <MetaLine icon={<ListChecks size={10} />} label="Steps" value={instance.graphSnapshot.length} />
           </LeftPanelSection>
-          {instance.agentAssignments.length > 0 && (
-            <LeftPanelSection title="Agents">
-              {instance.agentAssignments.map((a) => (
-                <div key={a.role + a.label} className="text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <CircleDot size={9} className="text-[var(--grace-accent)]/60" />
-                    <span className="font-medium truncate">{a.agentName}</span>
-                  </div>
-                  <span className="ml-3.5 text-[10px] text-muted-foreground/60">{a.label} · {a.role}</span>
+          {(() => {
+            const assigned = instance.agentAssignments;
+            const requirements = [
+              ...(blueprint?.agentConfig.primary ? [blueprint.agentConfig.primary] : []),
+              ...(blueprint?.agentConfig.specialists ?? []),
+            ];
+            const unassigned = requirements.filter(
+              (req) => req.required && !assigned.some((a) => a.label === req.label)
+            );
+            if (assigned.length === 0 && unassigned.length === 0) return null;
+            return (
+              <LeftPanelSection title="Agents">
+                <div className="space-y-2">
+                  {assigned.map((a) => {
+                    const req = requirements.find((r) => r.label === a.label);
+                    return (
+                      <div key={a.role + a.label} className="space-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <CircleDot size={9} className="text-emerald-500/70 shrink-0" />
+                          <span className="text-xs font-medium truncate">{a.agentName}</span>
+                        </div>
+                        <div className="ml-3.5 flex items-center gap-1 flex-wrap">
+                          <span className="text-[10px] text-muted-foreground/60 truncate">{a.label}</span>
+                          <span className="text-[10px] text-muted-foreground/40">·</span>
+                          <span className="text-[10px] text-muted-foreground/50">{a.role}</span>
+                        </div>
+                        {req?.description && (
+                          <p className="ml-3.5 text-[10px] text-muted-foreground/60 leading-relaxed">{req.description}</p>
+                        )}
+                        {(req?.capabilities?.length ?? 0) > 0 && (
+                          <div className="ml-3.5 flex flex-wrap gap-1 pt-0.5">
+                            {req!.capabilities!.map((cap) => (
+                              <span key={cap} className="rounded-full bg-muted/60 px-1.5 py-0.5 text-[9px] text-muted-foreground">{cap}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {unassigned.map((req) => (
+                    <div key={req.label} className="space-y-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <AlertTriangle size={9} className="text-amber-500/70 shrink-0" />
+                        <span className="text-xs font-medium truncate text-muted-foreground/70">{req.label}</span>
+                        <span className="ml-auto rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] text-amber-600 uppercase tracking-wide shrink-0">unassigned</span>
+                      </div>
+                      {req.description && (
+                        <p className="ml-3.5 text-[10px] text-muted-foreground/50 leading-relaxed">{req.description}</p>
+                      )}
+                    </div>
+                  ))}
+                  {onEditAgents && (
+                    <button
+                      type="button"
+                      onClick={onEditAgents}
+                      className="flex w-full items-center gap-1.5 rounded border border-border/50 px-2 py-1 text-[10px] text-muted-foreground hover:text-[var(--grace-accent)] hover:border-[var(--grace-accent)]/30 transition-colors mt-1"
+                    >
+                      <Settings2 size={10} />
+                      Edit Agent Assignments
+                    </button>
+                  )}
                 </div>
-              ))}
-            </LeftPanelSection>
-          )}
+              </LeftPanelSection>
+            );
+          })()}
           {instance.configSnapshot.length > 0 && (
             <LeftPanelSection title="Configuration">
               {instance.configSnapshot.map((ans) => (
@@ -1659,6 +1738,9 @@ export function GraceStudio() {
   // Delete instance
   const [deleteOpen, setDeleteOpen] = useState(false);
 
+  // Edit agents
+  const [editAgentsOpen, setEditAgentsOpen] = useState(false);
+
   // Step inspector state
   const [selectedStep, setSelectedStep] = useState<FlowStep | null>(null);
 
@@ -2036,6 +2118,7 @@ export function GraceStudio() {
           <LeftPanel
             mode={mode} blueprint={blueprint} instance={instance}
             onDeleteInstance={mode === "instance" ? () => setDeleteOpen(true) : undefined}
+            onEditAgents={mode === "instance" && instance ? () => setEditAgentsOpen(true) : undefined}
           />
         )}
 
@@ -2092,6 +2175,19 @@ export function GraceStudio() {
         onConfirm={handleDeleteInstance}
         onCancel={() => setDeleteOpen(false)}
       />
+
+      {editAgentsOpen && instance && (
+        <EditInstanceModal
+          instance={instance}
+          open={editAgentsOpen}
+          onClose={() => setEditAgentsOpen(false)}
+          onSaved={(updated) => {
+            setInstance(updated);
+            setEditAgentsOpen(false);
+          }}
+          initialTab="agents"
+        />
+      )}
 
       {/* Studio entry modal — shown automatically on landing */}
       {mode === "landing" && (

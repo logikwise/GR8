@@ -2,10 +2,7 @@
  * ManageBlueprintModal — Manage actions for a Blueprint.
  * Available ONLY from the Workflows/library context, NOT from Studio preview.
  *
- * Tabs: Overview | Edit | Export | Syntax Check
- *
- * TODO (Phase 4): Add versioning tab and git-based export.
- * TODO (Phase 4): Connect Edit save to backend API (PATCH /api/blueprints/:id).
+ * Tabs: Overview | Edit | Agents | Export | Syntax Check
  */
 
 import { useState } from "react";
@@ -21,10 +18,20 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { blueprintService } from "../blueprints/blueprintService";
-import type { Blueprint } from "../blueprints/blueprintTypes";
-import { CheckCircle, AlertCircle, Copy, Check } from "lucide-react";
+import type { Blueprint, AgentRequirement } from "../blueprints/blueprintTypes";
+import {
+  CheckCircle,
+  AlertCircle,
+  Copy,
+  Check,
+  Plus,
+  Trash2,
+  CircleDot,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 
-type ManageTab = "overview" | "edit" | "export" | "syntax";
+type ManageTab = "overview" | "edit" | "agents" | "export" | "syntax";
 
 interface ManageBlueprintModalProps {
   blueprint: Blueprint;
@@ -81,6 +88,308 @@ function MetaRow({ label, value }: { label: string; value?: string }) {
   );
 }
 
+/* ── Capability chip tag input ─────────────────────────────────────────── */
+function CapabilityEditor({
+  value,
+  onChange,
+  placeholder = "e.g. code-generation, planning",
+}: {
+  value: string[];
+  onChange: (caps: string[]) => void;
+  placeholder?: string;
+}) {
+  const [input, setInput] = useState("");
+
+  function commit() {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    const parts = trimmed.split(",").map((s) => s.trim()).filter(Boolean);
+    const next = Array.from(new Set([...value, ...parts]));
+    onChange(next);
+    setInput("");
+  }
+
+  function remove(cap: string) {
+    onChange(value.filter((c) => c !== cap));
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap gap-1 min-h-6">
+        {value.map((cap) => (
+          <span
+            key={cap}
+            className="inline-flex items-center gap-1 rounded-full bg-[var(--grace-accent)]/10 px-2 py-0.5 text-[10px] font-medium text-[var(--grace-accent)]"
+          >
+            {cap}
+            <button
+              type="button"
+              onClick={() => remove(cap)}
+              className="hover:text-destructive transition-colors"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        {value.length === 0 && (
+          <span className="text-[10px] text-muted-foreground/50 py-0.5">No capabilities defined</span>
+        )}
+      </div>
+      <div className="flex gap-1.5">
+        <Input
+          className="h-7 text-xs"
+          placeholder={placeholder}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") {
+              e.preventDefault();
+              commit();
+            }
+          }}
+        />
+        <button
+          type="button"
+          onClick={commit}
+          className="flex items-center justify-center w-7 h-7 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors text-xs shrink-0"
+          title="Add capability"
+        >
+          <Plus size={12} />
+        </button>
+      </div>
+      <p className="text-[10px] text-muted-foreground/60">Comma-separate or press Enter to add multiple at once.</p>
+    </div>
+  );
+}
+
+/* ── Single agent requirement editor card ──────────────────────────────── */
+function AgentCard({
+  agent,
+  onChange,
+  onRemove,
+  isPrimary,
+}: {
+  agent: AgentRequirement;
+  onChange: (a: AgentRequirement) => void;
+  onRemove?: () => void;
+  isPrimary: boolean;
+}) {
+  const [expanded, setExpanded] = useState(true);
+
+  return (
+    <div className="rounded-lg border border-border/60 bg-muted/20 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border/40">
+        <CircleDot size={11} className={isPrimary ? "text-[var(--grace-accent)]" : "text-muted-foreground/60"} />
+        <span className="flex-1 text-xs font-medium truncate">
+          {agent.label || (isPrimary ? "Primary Agent" : "Specialist")}
+        </span>
+        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground uppercase tracking-wide">
+          {isPrimary ? "primary" : "specialist"}
+        </span>
+        {!isPrimary && !agent.required && (
+          <span className="rounded-full bg-muted/80 px-1.5 py-0.5 text-[9px] text-muted-foreground/60 uppercase tracking-wide">
+            optional
+          </span>
+        )}
+        {!isPrimary && onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="text-muted-foreground/40 hover:text-destructive transition-colors"
+            title="Remove specialist"
+          >
+            <Trash2 size={12} />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setExpanded((x) => !x)}
+          className="text-muted-foreground/40 hover:text-foreground transition-colors"
+        >
+          {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="p-3 space-y-3">
+          {/* Label */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+              Label
+            </label>
+            <Input
+              className="h-7 text-xs"
+              value={agent.label}
+              onChange={(e) => onChange({ ...agent, label: e.target.value })}
+              placeholder={isPrimary ? "e.g. Primary Agent" : "e.g. Research Specialist"}
+            />
+          </div>
+
+          {/* Description */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+              Description
+            </label>
+            <Textarea
+              className="min-h-14 text-xs resize-none"
+              value={agent.description ?? ""}
+              onChange={(e) => onChange({ ...agent, description: e.target.value })}
+              placeholder="Describe what this agent is responsible for…"
+            />
+          </div>
+
+          {/* Required (specialists only) */}
+          {!isPrimary && (
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={agent.required}
+                onChange={(e) => onChange({ ...agent, required: e.target.checked })}
+                className="rounded"
+              />
+              <span className="text-xs text-muted-foreground">Required (cannot run without this agent)</span>
+            </label>
+          )}
+
+          {/* Capabilities */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+              Capability Requirements
+            </label>
+            <CapabilityEditor
+              value={agent.capabilities ?? []}
+              onChange={(caps) => onChange({ ...agent, capabilities: caps })}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Agents tab ─────────────────────────────────────────────────────────── */
+function AgentsTab({
+  draft,
+  setDraft,
+}: {
+  draft: Blueprint;
+  setDraft: React.Dispatch<React.SetStateAction<Blueprint>>;
+}) {
+  function setPrimary(a: AgentRequirement) {
+    setDraft((d) => ({ ...d, agentConfig: { ...d.agentConfig, primary: a } }));
+  }
+
+  function setSpecialist(idx: number, a: AgentRequirement) {
+    setDraft((d) => {
+      const specs = [...(d.agentConfig.specialists ?? [])];
+      specs[idx] = a;
+      return { ...d, agentConfig: { ...d.agentConfig, specialists: specs } };
+    });
+  }
+
+  function removeSpecialist(idx: number) {
+    setDraft((d) => {
+      const specs = [...(d.agentConfig.specialists ?? [])];
+      specs.splice(idx, 1);
+      return { ...d, agentConfig: { ...d.agentConfig, specialists: specs } };
+    });
+  }
+
+  function addSpecialist() {
+    const newSpec: AgentRequirement = {
+      role: "specialist",
+      label: "New Specialist",
+      description: "",
+      required: false,
+      capabilities: [],
+    };
+    setDraft((d) => ({
+      ...d,
+      agentConfig: {
+        ...d.agentConfig,
+        specialists: [...(d.agentConfig.specialists ?? []), newSpec],
+      },
+    }));
+  }
+
+  function initPrimary() {
+    setPrimary({ role: "primary", label: "Primary Agent", required: true, capabilities: [] });
+  }
+
+  return (
+    <div className="space-y-3 py-1">
+      {/* Primary */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Primary Agent</p>
+        </div>
+        {draft.agentConfig.primary ? (
+          <AgentCard
+            agent={draft.agentConfig.primary}
+            onChange={setPrimary}
+            isPrimary
+          />
+        ) : (
+          <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border/60 p-4">
+            <p className="text-xs text-muted-foreground">No primary agent defined.</p>
+            <Button variant="outline" size="sm" onClick={initPrimary}>
+              <Plus size={12} className="mr-1" /> Add Primary Agent
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Specialists */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Specialists</p>
+          <button
+            type="button"
+            onClick={addSpecialist}
+            className="flex items-center gap-1 text-[10px] text-[var(--grace-accent)] hover:underline"
+          >
+            <Plus size={10} /> Add Specialist
+          </button>
+        </div>
+
+        {(draft.agentConfig.specialists ?? []).length === 0 ? (
+          <p className="text-[11px] text-muted-foreground/60 py-2">
+            No specialist agents defined. Click "Add Specialist" to define additional agent roles.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {(draft.agentConfig.specialists ?? []).map((sp, idx) => (
+              <AgentCard
+                key={idx}
+                agent={sp}
+                onChange={(a) => setSpecialist(idx, a)}
+                onRemove={() => removeSpecialist(idx)}
+                isPrimary={false}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Steps using agent roles */}
+      {draft.steps.some((s) => s.agentRole) && (
+        <div className="rounded-lg border border-border/40 bg-muted/10 p-3 space-y-1.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Step → Role Assignments</p>
+          {draft.steps.filter((s) => s.agentRole).map((s) => (
+            <div key={s.id} className="flex items-center gap-2 text-[11px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--grace-accent)]/50 shrink-0" />
+              <span className="text-foreground truncate">{s.name}</span>
+              <span className="text-muted-foreground">→</span>
+              <span className="text-[var(--grace-accent)]/80 truncate">{s.agentRole}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ManageBlueprintModal({ blueprint: initialBlueprint, open, onClose, onUpdated }: ManageBlueprintModalProps) {
   const [tab, setTab] = useState<ManageTab>("overview");
   const [draft, setDraft] = useState<Blueprint>(initialBlueprint);
@@ -90,8 +399,9 @@ export function ManageBlueprintModal({ blueprint: initialBlueprint, open, onClos
   const TABS: { id: ManageTab; label: string }[] = [
     { id: "overview", label: "Overview" },
     { id: "edit", label: "Edit" },
+    { id: "agents", label: "Agents" },
     { id: "export", label: "Export" },
-    { id: "syntax", label: "Syntax Check" },
+    { id: "syntax", label: "Syntax" },
   ];
 
   function handleSave() {
@@ -121,6 +431,8 @@ export function ManageBlueprintModal({ blueprint: initialBlueprint, open, onClos
     onClose();
   }
 
+  const isEditTab = tab === "edit" || tab === "agents";
+
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-xl">
@@ -137,7 +449,7 @@ export function ManageBlueprintModal({ blueprint: initialBlueprint, open, onClos
               type="button"
               onClick={() => setTab(t.id)}
               className={cn(
-                "px-4 py-2 text-xs font-medium border-b-2 transition-colors",
+                "px-3 py-2 text-xs font-medium border-b-2 transition-colors",
                 tab === t.id
                   ? "border-[var(--grace-accent)] text-[var(--grace-accent)]"
                   : "border-transparent text-muted-foreground hover:text-foreground"
@@ -148,7 +460,7 @@ export function ManageBlueprintModal({ blueprint: initialBlueprint, open, onClos
           ))}
         </div>
 
-        <div className="min-h-48 max-h-96 overflow-y-auto">
+        <div className="min-h-48 max-h-[60vh] overflow-y-auto">
           {tab === "overview" && (
             <div className="space-y-2 py-1">
               <MetaRow label="Name" value={draft.name} />
@@ -158,6 +470,14 @@ export function ManageBlueprintModal({ blueprint: initialBlueprint, open, onClos
               <MetaRow label="Category" value={draft.ui?.category} />
               <MetaRow label="Steps" value={String(draft.steps.length)} />
               <MetaRow label="Agent" value={draft.agentConfig.primary?.label} />
+              <MetaRow
+                label="Specialists"
+                value={
+                  (draft.agentConfig.specialists?.length ?? 0) > 0
+                    ? draft.agentConfig.specialists!.map((s) => s.label).join(", ")
+                    : undefined
+                }
+              />
               <MetaRow label="Tags" value={draft.ui?.tags?.join(", ")} />
               <MetaRow label="Created" value={draft.createdAt ? new Date(draft.createdAt).toLocaleDateString() : undefined} />
               <MetaRow label="Updated" value={draft.updatedAt ? new Date(draft.updatedAt).toLocaleDateString() : undefined} />
@@ -226,6 +546,10 @@ export function ManageBlueprintModal({ blueprint: initialBlueprint, open, onClos
             </div>
           )}
 
+          {tab === "agents" && (
+            <AgentsTab draft={draft} setDraft={setDraft} />
+          )}
+
           {tab === "export" && (
             <div className="py-1 space-y-2">
               <p className="text-xs text-muted-foreground">Blueprint JSON — copy and save as a .json file.</p>
@@ -254,7 +578,7 @@ export function ManageBlueprintModal({ blueprint: initialBlueprint, open, onClos
 
         <div className="flex justify-between gap-2 pt-1 border-t border-border/60">
           <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
-          {tab === "edit" && (
+          {isEditTab && (
             <Button
               size="sm"
               style={{ background: "var(--grace-accent)", color: "var(--grace-accent-foreground)" }}

@@ -242,16 +242,20 @@ function AgentRow({
 
 // ─── Main modal ───────────────────────────────────────────────────────────────
 
+type EditInstanceTab = "general" | "config" | "agents" | "workflow";
+
 export function EditInstanceModal({
   instance,
   open,
   onClose,
   onSaved,
+  initialTab,
 }: {
   instance: Instance;
   open: boolean;
   onClose: () => void;
   onSaved: (updated: Instance) => void;
+  initialTab?: EditInstanceTab;
 }) {
   const blueprint = blueprintService.getById(instance.blueprintId);
   const discovery = agentDiscoveryService.getLastDiscovery();
@@ -274,11 +278,11 @@ export function EditInstanceModal({
     )
   );
 
-  // ── Section open/closed ───────────────────────────────────────────────────
-  const [secGeneral, setSecGeneral]   = useState(true);
-  const [secConfig,  setSecConfig]    = useState(false);
-  const [secAgents,  setSecAgents]    = useState(false);
-  const [secWorkflow, setSecWorkflow] = useState(false);
+  // ── Section open/closed — initialTab jumps to the right section ───────────
+  const [secGeneral, setSecGeneral]   = useState(!initialTab || initialTab === "general");
+  const [secConfig,  setSecConfig]    = useState(initialTab === "config");
+  const [secAgents,  setSecAgents]    = useState(initialTab === "agents");
+  const [secWorkflow, setSecWorkflow] = useState(initialTab === "workflow");
 
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState<string | null>(null);
