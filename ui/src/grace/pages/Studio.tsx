@@ -48,6 +48,7 @@ import type { FlowStep } from "../components/FlowStepCard";
 import { StepInspector } from "../components/StepInspector";
 import { FlowCanvas } from "../components/FlowCanvas";
 import type { StepStatusMap } from "../components/FlowCanvas";
+import { GraphCanvas } from "../components/GraphCanvas";
 import type { StudioAgent } from "../components/GraphCanvas";
 import { outputService } from "../outputs/outputService";
 import { inputService } from "../inputs/inputService";
@@ -720,9 +721,6 @@ function CenterCanvas({
       <div className="flex flex-1 overflow-hidden relative">
         <div className="flex flex-1 flex-col overflow-hidden">
           {centerTab === "flow" && (
-            <FlowView steps={steps} agents={agents} selectedStep={selectedStep} onInspect={onInspect} runRecord={runRecord} />
-          )}
-          {centerTab === "graph" && (
             <div className="flex-1 overflow-hidden relative" style={{ height: "100%" }}>
               <FlowCanvas
                 steps={steps}
@@ -731,6 +729,9 @@ function CenterCanvas({
                 onStepInspect={onInspect}
               />
             </div>
+          )}
+          {centerTab === "graph" && (
+            <GraphCanvas steps={steps} agents={agents} onStepInspect={onInspect} />
           )}
           {centerTab === "runtime" && (
             <RuntimeView mode={mode} instance={instance} runRecord={runRecord} />
