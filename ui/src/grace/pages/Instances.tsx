@@ -6,12 +6,13 @@
  */
 
 import { useState, useEffect, useMemo } from "react";
-import { Box, ArrowRight, Clock, CircleDot, Trash2, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { Box, ArrowRight, Clock, CircleDot, Trash2, CheckCircle2, XCircle, Loader2, Settings2 } from "lucide-react";
 import { useNavigate } from "@/lib/router";
 import { instanceService } from "../instances/instanceService";
 import { runService } from "../providers/runService";
 import { InstanceCard } from "../components/InstanceCard";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { EditInstanceModal } from "../components/EditInstanceModal";
 import { SearchFilterBar, type FilterDef, type SortOption } from "../components/SearchFilterBar";
 import type { Instance, InstanceStatus } from "../instances/instanceTypes";
 import type { RunStatus } from "../providers/providerTypes";
@@ -54,10 +55,11 @@ const RUN_STATUS_ROW: Partial<Record<RunStatus, { icon: React.ReactNode; color: 
 };
 
 function InstanceRow({
-  instance, onOpen, onDelete,
+  instance, onOpen, onEdit, onDelete,
 }: {
   instance: Instance;
   onOpen: (i: Instance) => void;
+  onEdit: (i: Instance) => void;
   onDelete: (i: Instance) => void;
 }) {
   const statusColor = STATUS_COLORS[instance.status] ?? STATUS_COLORS.draft;
@@ -101,11 +103,18 @@ function InstanceRow({
           </span>
         )}
       </div>
-      <button type="button" onClick={() => onDelete(instance)}
-        className="flex items-center justify-center w-7 h-7 rounded text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
-        title="Delete instance">
-        <Trash2 size={13} />
-      </button>
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+        <button type="button" onClick={() => onEdit(instance)}
+          className="flex items-center justify-center w-7 h-7 rounded text-muted-foreground/40 hover:text-[var(--grace-accent)] hover:bg-[var(--grace-accent-muted)] transition-colors"
+          title="Edit instance">
+          <Settings2 size={13} />
+        </button>
+        <button type="button" onClick={() => onDelete(instance)}
+          className="flex items-center justify-center w-7 h-7 rounded text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-colors"
+          title="Delete instance">
+          <Trash2 size={13} />
+        </button>
+      </div>
       <button type="button" onClick={() => onOpen(instance)}
         className="flex items-center gap-1 rounded border border-[var(--grace-accent)] px-2.5 py-1 text-xs font-medium text-[var(--grace-accent)] transition-colors hover:bg-[var(--grace-accent-muted)] shrink-0">
         Open <ArrowRight size={11} />
@@ -151,8 +160,8 @@ export function GraceInstances() {
   const [activeSort, setActiveSort] = useState("created-desc");
   const [viewMode, setViewMode] = useState<"card" | "list">("card");
 
-  // Delete state
   const [deleteTarget, setDeleteTarget] = useState<Instance | null>(null);
+  const [editTarget,   setEditTarget]   = useState<Instance | null>(null);
 
   function reload() {
     setAllInstances(instanceService.getAll());
@@ -244,21 +253,31 @@ export function GraceInstances() {
               {filtered.map((inst) => (
                 <div key={inst.id} className="relative group">
                   <InstanceCard instance={inst} onOpen={handleOpen} />
-                  <button
-                    type="button"
-                    onClick={() => setDeleteTarget(inst)}
-                    className="absolute top-2 right-2 flex items-center justify-center w-6 h-6 rounded text-muted-foreground/20 hover:text-destructive hover:bg-destructive/10 transition-all opacity-0 group-hover:opacity-100"
-                    title="Delete instance"
-                  >
-                    <Trash2 size={12} />
-                  </button>
+                  <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                    <button
+                      type="button"
+                      onClick={() => setEditTarget(inst)}
+                      className="flex items-center justify-center w-6 h-6 rounded text-muted-foreground/40 hover:text-[var(--grace-accent)] hover:bg-[var(--grace-accent-muted)] transition-colors"
+                      title="Edit instance"
+                    >
+                      <Settings2 size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteTarget(inst)}
+                      className="flex items-center justify-center w-6 h-6 rounded text-muted-foreground/20 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      title="Delete instance"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           ) : (
             <div className="space-y-1.5">
               {filtered.map((inst) => (
-                <InstanceRow key={inst.id} instance={inst} onOpen={handleOpen} onDelete={setDeleteTarget} />
+                <InstanceRow key={inst.id} instance={inst} onOpen={handleOpen} onEdit={setEditTarget} onDelete={setDeleteTarget} />
               ))}
             </div>
           )}
@@ -273,6 +292,15 @@ export function GraceInstances() {
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      {editTarget && (
+        <EditInstanceModal
+          instance={editTarget}
+          open={!!editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => { setEditTarget(null); reload(); }}
+        />
+      )}
     </div>
   );
 }
