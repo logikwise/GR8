@@ -71,6 +71,7 @@ interface StepNodeData {
 
 interface AgentNodeData {
   agent: StudioAgent;
+  subAgents: StudioAgent[];
   onInspect: (agent: StudioAgent) => void;
 }
 
@@ -322,12 +323,67 @@ function StepNode({ data }: { data: StepNodeData }) {
 
 // ─── Agent Node ───────────────────────────────────────────────────────────────
 
+const DOT_AGENT_COLLAPSED = 10;
+const DOT_AGENT_EXPANDED  = 28;
+
+function AgentOrbiters({
+  subAgents, expanded, onToggle, onInspect,
+}: {
+  subAgents: StudioAgent[];
+  expanded: boolean;
+  onToggle: () => void;
+  onInspect: (agent: StudioAgent) => void;
+}) {
+  if (subAgents.length === 0) return null;
+  const color = SUB_AGENT_COLOR;
+  return (
+    <div
+      style={{ display: "flex", alignItems: "flex-start", justifyContent: "center", gap: expanded ? 6 : 4, marginTop: 6, cursor: "pointer" }}
+      title={expanded ? "Collapse sub-agents" : subAgents.map((a) => a.label).join(", ")}
+      onClick={(e) => { e.stopPropagation(); onToggle(); }}
+    >
+      {subAgents.map((sub) => (
+        <div
+          key={sub.id}
+          style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}
+          onClick={(e) => { if (expanded) { e.stopPropagation(); onInspect(sub); } }}
+        >
+          <div style={{
+            width:  expanded ? DOT_AGENT_EXPANDED  : DOT_AGENT_COLLAPSED,
+            height: expanded ? DOT_AGENT_EXPANDED  : DOT_AGENT_COLLAPSED,
+            borderRadius: "50%",
+            background: expanded ? `rgba(${hexToRgb(color)},0.12)` : color,
+            border:  expanded ? `1.5px solid ${color}` : "none",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            transition: "all 0.18s ease",
+            flexShrink: 0,
+          }}>
+            {expanded && (
+              <span style={{ fontSize: 11, fontWeight: 800, color, lineHeight: 1 }}>
+                {sub.label.charAt(0).toUpperCase()}
+              </span>
+            )}
+          </div>
+          {expanded && (
+            <span style={{
+              fontSize: 7, color, fontWeight: 600, textAlign: "center",
+              maxWidth: 38, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {trunc(sub.label, 8)}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function AgentNode({ data }: { data: AgentNodeData }) {
-  const { agent, onInspect } = data;
-  const isPrimary = agent.isPrimary !== false && !agent.id.startsWith("specialist-");
-  const color     = isPrimary ? PRIMARY_AGENT_COLOR : SUB_AGENT_COLOR;
-  const size      = isPrimary ? PRIMARY_SIZE : SUB_SIZE;
-  const typeLabel = isPrimary ? "AGENT" : "SUB";
+  const { agent, subAgents, onInspect } = data;
+  const color = PRIMARY_AGENT_COLOR;
+  const size  = PRIMARY_SIZE;
+
+  const [orbitersOpen, setOrbitersOpen] = useState(false);
 
   return (
     <div
@@ -335,40 +391,30 @@ function AgentNode({ data }: { data: AgentNodeData }) {
       onClick={() => onInspect(agent)}
     >
       {/* Type label */}
-      <div style={{ marginBottom: 4, minHeight: isPrimary ? 20 : 16, display: "flex", alignItems: "flex-end" }}>
-        <span style={{
-          fontSize: isPrimary ? 8 : 7, color, fontWeight: 700,
-          textTransform: "uppercase", letterSpacing: "0.12em", opacity: 0.8,
-        }}>
-          {typeLabel}
+      <div style={{ marginBottom: 4, minHeight: 20, display: "flex", alignItems: "flex-end" }}>
+        <span style={{ fontSize: 8, color, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", opacity: 0.8 }}>
+          AGENT
         </span>
       </div>
 
       {/* Circle */}
       <div style={{ position: "relative" }}>
-        {isPrimary && (
-          <Handle type="source" position={Position.Right}
-            style={{ background: color, width: 7, height: 7, border: "none", right: -3 }} />
-        )}
+        <Handle type="source" position={Position.Right}
+          style={{ background: color, width: 7, height: 7, border: "none", right: -3 }} />
         <Handle type="target" position={Position.Left}
           style={{ background: color, width: 6, height: 6, border: "none", left: -2 }} />
-        <Handle type="source" position={Position.Bottom}
-          id="bottom"
-          style={{ background: color, width: 6, height: 6, border: "none", bottom: -2 }} />
 
         <div style={{
           width: size, height: size, borderRadius: "50%",
-          border: `${isPrimary ? 2 : 1.5}px solid ${color}`,
+          border: `2px solid ${color}`,
           borderStyle: agent.linked ? "solid" : "dashed",
-          background: `rgba(${hexToRgb(color)},${isPrimary ? "0.11" : "0.07"})`,
-          boxShadow: isPrimary
-            ? `0 0 0 3px ${color}18, 0 2px 10px ${color}28`
-            : `0 1px 6px rgba(0,0,0,0.15)`,
+          background: `rgba(${hexToRgb(color)},0.11)`,
+          boxShadow: `0 0 0 3px ${color}18, 0 2px 10px ${color}28`,
           display: "flex", alignItems: "center", justifyContent: "center",
           transition: "box-shadow 0.15s",
           flexShrink: 0,
         }}>
-          <span style={{ fontSize: isPrimary ? 20 : 14, fontWeight: 800, color, lineHeight: 1, opacity: 0.9 }}>
+          <span style={{ fontSize: 20, fontWeight: 800, color, lineHeight: 1, opacity: 0.9 }}>
             {agent.label.charAt(0).toUpperCase()}
           </span>
         </div>
@@ -376,12 +422,20 @@ function AgentNode({ data }: { data: AgentNodeData }) {
 
       {/* Name below */}
       <div style={{
-        marginTop: 5, fontSize: isPrimary ? 9 : 8, fontWeight: 600,
+        marginTop: 5, fontSize: 9, fontWeight: 600,
         color: "var(--foreground)", opacity: 0.65, textAlign: "center",
         maxWidth: size + 24, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
       }}>
         {trunc(agent.label, 12)}
       </div>
+
+      {/* Sub-agent orbiters */}
+      <AgentOrbiters
+        subAgents={subAgents}
+        expanded={orbitersOpen}
+        onToggle={() => setOrbitersOpen((v) => !v)}
+        onInspect={onInspect}
+      />
     </div>
   );
 }
@@ -420,7 +474,7 @@ function buildNodesEdges(
     nodes.push({
       id: agentId, type: "agentNode",
       position: { x, y: 0 },
-      data: { agent, onInspect: onAgentInspect } satisfies AgentNodeData,
+      data: { agent, subAgents, onInspect: onAgentInspect } satisfies AgentNodeData,
     });
 
     // Edge to next primary or first step
@@ -437,39 +491,6 @@ function buildNodesEdges(
         },
       });
     }
-  });
-
-  // ── Sub-agents: below each primary ────────────────────────────────────────
-  subAgents.forEach((agent, i) => {
-    const subId = `agent-${agent.id}`;
-    // Cluster below the first primary agent
-    const parentPrimary = primaryAgents[0];
-    const parentX = parentPrimary
-      ? -(primaryAgents.length) * (PRIMARY_SIZE + AGENT_GAP) - AGENT_STEP_GAP
-      : 0;
-    const subCount = subAgents.length;
-    const totalWidth = subCount * (SUB_SIZE + AGENT_GAP) - AGENT_GAP;
-    const xOffset = (i - (subCount - 1) / 2) * (SUB_SIZE + AGENT_GAP);
-    const x = parentX + PRIMARY_SIZE / 2 - SUB_SIZE / 2 + xOffset;
-    const y = SUB_OFFSET_Y;
-
-    nodes.push({
-      id: subId, type: "agentNode",
-      position: { x, y },
-      data: { agent, onInspect: onAgentInspect } satisfies AgentNodeData,
-    });
-
-    // Edge from parent primary down to sub
-    if (parentPrimary) {
-      edges.push({
-        id: `sub-edge-${subId}`,
-        source: `agent-${parentPrimary.id}`,
-        sourceHandle: "bottom",
-        target: subId,
-        style: { stroke: SUB_AGENT_COLOR, strokeWidth: 1, strokeDasharray: "4 3" },
-      });
-    }
-    void totalWidth; // suppress unused warning
   });
 
   // ── Step nodes ─────────────────────────────────────────────────────────────
@@ -503,21 +524,10 @@ function buildNodesEdges(
 function computeRestPositions(agents: StudioAgent[], steps: FlowStep[]): Record<string, { x: number; y: number }> {
   const positions: Record<string, { x: number; y: number }> = {};
   const primaryAgents = agents.filter((a) => a.isPrimary !== false && !a.id.startsWith("specialist-"));
-  const subAgents     = agents.filter((a) => a.isPrimary === false || a.id.startsWith("specialist-"));
 
   primaryAgents.forEach((agent, i) => {
     const x = -(primaryAgents.length - i) * (PRIMARY_SIZE + AGENT_GAP) - AGENT_STEP_GAP;
     positions[`agent-${agent.id}`] = { x, y: 0 };
-  });
-
-  subAgents.forEach((agent, i) => {
-    const parentPrimary = primaryAgents[0];
-    const parentX = parentPrimary
-      ? -(primaryAgents.length) * (PRIMARY_SIZE + AGENT_GAP) - AGENT_STEP_GAP
-      : 0;
-    const xOffset = (i - (subAgents.length - 1) / 2) * (SUB_SIZE + AGENT_GAP);
-    const x = parentX + PRIMARY_SIZE / 2 - SUB_SIZE / 2 + xOffset;
-    positions[`agent-${agent.id}`] = { x, y: SUB_OFFSET_Y };
   });
 
   steps.forEach((step, i) => {
@@ -664,7 +674,11 @@ function FlowCanvasInner({
         nodes={nodes} edges={edges}
         onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
         onNodeDragStart={(_, node) => { draggingRef.current.add(node.id); velRef.current[node.id] = { vx: 0, vy: 0 }; }}
-        onNodeDragStop={(_, node) => { draggingRef.current.delete(node.id); }}
+        onNodeDragStop={(_, node) => {
+          draggingRef.current.delete(node.id);
+          restRef.current[node.id] = { x: node.position.x, y: node.position.y };
+          velRef.current[node.id]  = { vx: 0, vy: 0 };
+        }}
         nodeTypes={NODE_TYPES}
         fitView fitViewOptions={{ padding: 0.32 }}
         minZoom={0.12} maxZoom={2.5}
@@ -680,11 +694,7 @@ function FlowCanvasInner({
         {showMinimap && (
           <MiniMap
             nodeColor={(node) => {
-              if (node.type === "agentNode") {
-                const d = node.data as AgentNodeData;
-                return d.agent.isPrimary !== false && !d.agent.id.startsWith("specialist-")
-                  ? PRIMARY_AGENT_COLOR : SUB_AGENT_COLOR;
-              }
+              if (node.type === "agentNode") return PRIMARY_AGENT_COLOR;
               return STATUS_COLOR[(node.data as StepNodeData)?.status ?? "idle"] ?? "#475569";
             }}
             maskColor="rgba(0,0,0,0.6)"
